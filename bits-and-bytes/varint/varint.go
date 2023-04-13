@@ -12,17 +12,20 @@ const (
 
 func Encode(i uint64) []byte {
 	result := []byte{}
+	curr := byte(0)
 
-	curr := byte(i & MASK)
-	i = i >> 7
-
-	for i != 0 {
-		result = append(result, curr|CONT_BIT)
+	for {
 		curr = byte(i & MASK)
 		i = i >> 7
+
+		if i == 0 {
+			result = append(result, curr)
+			break
+		}
+
+		result = append(result, curr|CONT_BIT)
 	}
 
-	result = append(result, curr)
 	return result
 }
 
@@ -35,12 +38,16 @@ func Encode(i uint64) []byte {
 func Decode(varint []byte) uint64 {
 	var result uint64
 	shift := 0
+	i := 0
 
-	for _, b := range varint {
-		result = result | (uint64(b) << shift)
+	for {
+		result |= uint64(varint[i]&MASK) << shift
 		shift += 7
+		if varint[i]&CONT_BIT == 0 {
+			return result
+		}
+		i++
 	}
-	return result
 }
 
 func Read(filename string) uint64 {
