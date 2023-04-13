@@ -6,15 +6,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const MAXUINT64 = ^uint64(0)
+
 func TestEncode(t *testing.T) {
 	assert.Equal(t, []byte{0x0}, Encode(0))
 	assert.Equal(t, []byte{0x1}, Encode(1))
 	assert.Equal(t, []byte{0x96, 0x01}, Encode(150))
-	assert.Equal(t, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01}, Encode(^uint64(0)))
+	assert.Equal(t, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01}, Encode(MAXUINT64))
 }
 
 func TestDecode(t *testing.T) {
-	assert.Equal(t, 1, Decode(Encode(1)))
+	assert.Equal(t, uint64(1), Decode([]byte{0x01}))
+	assert.Equal(t, uint64(150), Decode([]byte{0x96, 0x01}))
+	assert.Equal(t, uint64(MAXUINT64), Decode([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01}))
 }
 
 func TestRead(t *testing.T) {
