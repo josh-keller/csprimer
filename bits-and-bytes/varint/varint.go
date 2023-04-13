@@ -23,6 +23,10 @@ func Encode(i uint64) []byte {
 	return result
 }
 
+func Decode(varint []byte) uint64 {
+	return 0
+}
+
 func Read(filename string) uint64 {
 	data, err := os.ReadFile(filename)
 	if err != nil {
