@@ -29,12 +29,6 @@ func Encode(i uint64) []byte {
 	return result
 }
 
-// start with result = 0 (uint64)
-// start with shift = 0 (will increment by 7)
-// for each byte in varint:
-// - convert to uint64
-// - shift by shift value
-// - add to result
 func Decode(varint []byte) uint64 {
 	var result uint64
 	shift := 0
