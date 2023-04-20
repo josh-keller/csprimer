@@ -1,4 +1,4 @@
-module color-convert
+module github.com/josh-keller/csprimer/color-convert
 
 go 1.19
 
