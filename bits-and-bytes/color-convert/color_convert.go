@@ -21,7 +21,7 @@ func normalize(hexBytes []byte) []byte {
 }
 
 func HexColorToRGB(hexBytes []byte) []byte {
-	hexBytes = hexBytes[1:]
+	hexBytes = hexBytes[1:] // trim the #
 	intsFromBytes := make([]int, 8)
 	if len(hexBytes) <= 4 {
 		hexBytes = normalize(hexBytes)
@@ -44,9 +44,10 @@ func HexColorToRGB(hexBytes []byte) []byte {
 }
 
 func HexDigitToInt(hex byte) int {
-	bit7 := hex & 0b01000000
-	addend := (bit7 >> 3) | (bit7 >> 6)
-	return (int(hex) & 0x0f) + int(addend)
+	alphaBit := hex & 0b01000000
+	addend := int((alphaBit >> 3) | (alphaBit >> 6))
+	masked := int(hex) & 0x0f
+	return masked + addend
 }
 
 func ConvertCSS(input io.Reader, output io.Writer) {
@@ -58,14 +59,14 @@ func ConvertCSS(input io.Reader, output io.Writer) {
 	}
 }
 
+func main() {
+	ConvertCSS(os.Stdin, os.Stdout)
+}
+
 // Old implentation when I was using the standard library to parse the hex to an single integer
 func HexToRGB(hex int) [3]int {
 	red := hex >> 16
 	green := hex & 0x00ff00 >> 8
 	blue := hex & 0x0000ff
 	return [3]int{red, green, blue}
-}
-
-func main() {
-	ConvertCSS(os.Stdin, os.Stdout)
 }
