@@ -1,4 +1,4 @@
-package color_convert
+package main
 
 import (
 	"io/ioutil"
@@ -10,9 +10,18 @@ import (
 )
 
 func TestConvertString(t *testing.T) {
-	assert.Equal(t, "rgb(254 3 10)", string(ConvertColor([]byte("#fe030a"))))
-	assert.Equal(t, "rgb(15 13 239)", string(ConvertColor([]byte("#0f0def"))))
+	assert.Equal(t, "rgb(254 3 10)", string(HexColorToRGB([]byte("#fe030a"))))
+	assert.Equal(t, "rgb(15 13 239)", string(HexColorToRGB([]byte("#0f0def"))))
 
+}
+
+func TestHexDigitToInt(t *testing.T) {
+	assert.Equal(t, 0, HexDigitToInt(byte('0')))
+	assert.Equal(t, 1, HexDigitToInt(byte('1')))
+	assert.Equal(t, 9, HexDigitToInt(byte('9')))
+	assert.Equal(t, 10, HexDigitToInt(byte('a')))
+	assert.Equal(t, 10, HexDigitToInt(byte('A')))
+	assert.Equal(t, 15, HexDigitToInt(byte('f')))
 }
 
 func TestHexToRGB(t *testing.T) {
@@ -29,6 +38,12 @@ func TestConvertCSS(t *testing.T) {
 
 func TestConvertCSSFile(t *testing.T) {
 	FilePairTest(t, "./input_files/simple.css", "./input_files/simple_expected.css")
+	FilePairTest(t, "./input_files/advanced.css", "./input_files/advanced_expected.css")
+}
+
+func TestNormalize(t *testing.T) {
+	assert.Equal(t, []byte{1, 1}, normalize([]byte{1}))
+	assert.Equal(t, []byte{1, 1, 2, 2}, normalize([]byte{1, 2}))
 }
 
 func FilePairTest(t *testing.T, inputFile, outputFile string) {
