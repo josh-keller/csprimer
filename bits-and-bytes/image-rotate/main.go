@@ -74,12 +74,8 @@ func main() {
 	bmp := bitmap.NewFromReader(input)
 	rotated := bitmap.Rotate(bmp)
 	binary.Write(output, binary.LittleEndian, &rotated.Header)
-	// output.Write(rotated.Header.Raw)
-	output.Write(rotated.InfoHeader.Raw)
-	binary.Write(output, binary.BigEndian, &rotated.Image)
-	fmt.Printf("%x\n", rotated.Header.Offset)
-	fmt.Println(bmp.InfoHeader.Width, bmp.InfoHeader.Height)
-	fmt.Println(rotated.InfoHeader.Width, rotated.InfoHeader.Height)
+	output.Write(rotated.RawInfo)
+	output.Write(rotated.Image)
 
 	// Print output file name
 	if outputFile == nil {
