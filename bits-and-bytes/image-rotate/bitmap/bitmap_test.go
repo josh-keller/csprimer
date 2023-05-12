@@ -3,8 +3,9 @@ package bitmap
 import (
 	"bytes"
 	"os"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -65,6 +66,7 @@ var (
 	rectBmp          = NewFromReader(bytes.NewReader(rectBmpBytes))
 )
 
+// TestSaveBitmap can be unskipped to verify that saving a BMP is successful
 func TestSaveBitmap(t *testing.T) {
 	t.Skip()
 	f, err := os.Create("test_rect.bmp")
@@ -86,85 +88,45 @@ func TestSaveBitmap(t *testing.T) {
 	}
 }
 
+// Tests that a new bitmap struct is created from a reader
 func TestNewFromReader(t *testing.T) {
-	if squareBmp.Width != 4 {
-		t.Errorf("Expected width of %d, got %d", 4, squareBmp.Width)
-	}
-
-	if squareBmp.Height != 4 {
-		t.Errorf("Expected height of %d, got %d", 4, squareBmp.Height)
-	}
-
-	if squareBmp.InfoSize != 40 {
-		t.Errorf("Expected infoSize of %d, got %d", 40, squareBmp.InfoSize)
-	}
-
-	if squareBmp.Offset != 54 {
-		t.Errorf("Expected offset of %d, got %d", 54, squareBmp.InfoSize)
-	}
-	if !reflect.DeepEqual(squareBmp.Image[0:12], []byte{0xff, 0x00, 0x00, 0xff, 0x00, 0x00, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00}) {
-		t.Errorf("Rotation expected BlBlWB, got %v", squareBmp.Image[0:12])
-	}
+	assert.Equal(t, uint32(4), squareBmp.Width)
+	assert.Equal(t, uint32(4), squareBmp.Height)
+	assert.Equal(t, uint32(40), squareBmp.InfoSize)
+	assert.Equal(t, uint32(54), squareBmp.Offset)
+	assert.Equal(t, []byte{0xff, 0x00, 0x00, 0xff, 0x00, 0x00, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00}, squareBmp.Image[0:12])
 }
 
 func TestRotateSquare(t *testing.T) {
-	rotated := Rotate(squareBmp)
-
-	if rotated.Width != 4 {
-		t.Errorf("Expected width of %d, got %d", 4, rotated.Width)
+	testCases := []struct {
+		bmp          Bitmap
+		expWidth     uint32
+		expHeight    uint32
+		expInfoSize  uint32
+		expOffset    uint32
+		bottomRow    []byte
+		lastSixBytes []byte
+	}{
+		{squareBmp, 4, 4, 40, 54,
+			[]byte{0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0x00, 0x00, 0xff, 0x00, 0x00, 0xff},
+			[]byte{0x00, 0xff, 0x00, 0x00, 0xff, 0x00},
+		},
+		{rectBmp, 3, 5, 40, 54,
+			[]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			[]byte{0x00, 0x00, 0xff, 0x00, 0x00, 0x00},
+		},
 	}
 
-	if rotated.Height != 4 {
-		t.Errorf("Expected height of %d, got %d", 4, rotated.Height)
-	}
-
-	if rotated.InfoSize != 40 {
-		t.Errorf("Expected infoSize of %d, got %d", 40, rotated.InfoSize)
-	}
-
-	if rotated.Offset != 54 {
-		t.Errorf("Expected offset of %d, got %d", 54, rotated.InfoSize)
-	}
-
-	bottomRow := rotated.Image[0:12]
-	if !reflect.DeepEqual(bottomRow, []byte{0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0x00, 0x00, 0xff, 0x00, 0x00, 0xff}) {
-		t.Errorf("Rotation expected BkBkWWRR, got %v", bottomRow)
-	}
-
-	topRightCorner := rotated.Image[45:48]
-	if !reflect.DeepEqual(topRightCorner, []byte{0x00, 0xff, 0x00}) {
-		t.Errorf("Rotation expected G, got %v", topRightCorner)
-	}
-}
-
-func TestRotateRect(t *testing.T) {
-	rotated := Rotate(rectBmp)
-
-	if rotated.Width != 3 {
-		t.Errorf("Expected width of %d, got %d", 4, rotated.Width)
-	}
-
-	if rotated.Height != 5 {
-		t.Errorf("Expected height of %d, got %d", 4, rotated.Height)
-	}
-
-	if rotated.InfoSize != 40 {
-		t.Errorf("Expected infoSize of %d, got %d", 40, rotated.InfoSize)
-	}
-
-	if rotated.Offset != 54 {
-		t.Errorf("Expected offset of %d, got %d", 54, rotated.InfoSize)
-	}
-
-	bottomRow := rotated.Image[0:9]
-	expectedBottomRow := []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00}
-	if !reflect.DeepEqual(bottomRow, expectedBottomRow) {
-		t.Errorf("Rotation expected %v, got %v", expectedBottomRow, bottomRow)
-	}
-
-	topRow := rotated.Image[48:57]
-	expectedTopRow := []byte{0x00, 0x00, 0xff, 0x00, 0x00, 0xff, 0x00, 0x00, 0xff}
-	if !reflect.DeepEqual(topRow, expectedTopRow) {
-		t.Errorf("Rotation expected %v, got %v", expectedTopRow, topRow)
+	for _, tc := range testCases {
+		rotated := Rotate(tc.bmp)
+		assert.Equal(t, tc.expWidth, rotated.Width)
+		assert.Equal(t, tc.expHeight, rotated.Height)
+		assert.Equal(t, tc.expInfoSize, rotated.InfoSize)
+		assert.Equal(t, tc.expOffset, rotated.Offset)
+		bytesPerRow := rotated.Width * 3
+		padding := (4 - (rotated.Width*3)%4) % 4
+		bytesPerRow += padding
+		assert.Equal(t, tc.bottomRow, rotated.Image[0:bytesPerRow])
+		assert.Equal(t, tc.lastSixBytes, rotated.Image[len(rotated.Image)-6:len(rotated.Image)])
 	}
 }

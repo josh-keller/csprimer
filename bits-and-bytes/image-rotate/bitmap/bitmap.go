@@ -26,23 +26,11 @@ type InfoHeader struct {
 	RawInfo      []byte
 }
 
-type Pixel struct {
-	Green uint8
-	Blue  uint8
-	Red   uint8
-}
-
 type Bitmap struct {
 	Header
 	InfoHeader
 	Image []byte
 }
-
-// TODO: Go back to old Image implementaiton: just bytes, not Pixel struct
-// This will help the padding
-// Calculate padding based on width before reading, make sure to account for padding while reading
-// Calculate padding when rotating too
-// Pull this out into function of r, c
 
 func NewFromReader(r io.Reader) Bitmap {
 	var bmp Bitmap
@@ -83,7 +71,8 @@ func readInfoHeader(r io.Reader, size uint32) InfoHeader {
 	infoHeader.BitsPerPixel = binary.LittleEndian.Uint16(buffer[10:12])
 	infoHeader.Compression = binary.LittleEndian.Uint32(buffer[12:16])
 	infoHeader.ImageSize = binary.LittleEndian.Uint32(buffer[16:20])
-	infoHeader.ColorsUsed = binary.LittleEndian.Uint32(buffer[28:32])
+	infoHeader.
+		infoHeader.ColorsUsed = binary.LittleEndian.Uint32(buffer[28:32])
 	infoHeader.RawInfo = append(binary.LittleEndian.AppendUint32(infoHeader.RawInfo, size), buffer...)
 
 	return infoHeader
