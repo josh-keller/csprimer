@@ -12,18 +12,38 @@ type Header struct {
 	Offset    uint32
 }
 
+type FP2DOT30 uint32
+
 type InfoHeader struct {
-	InfoSize     uint32
-	Width        uint32
-	Height       uint32
-	Planes       uint16
-	BitsPerPixel uint16
-	Compression  uint32
-	ImageSize    uint32
-	XpixelsPerM  uint32
-	YpixelsPerM  uint32
-	ColorsUsed   uint32
-	RawInfo      []byte
+	InfoSize uint32
+	Info
+}
+
+type Info struct {
+	Width           int32
+	Height          int32
+	Planes          uint16
+	BitsPerPixel    uint16
+	Compression     uint32
+	ImageSize       uint32
+	XpixelsPerM     int32
+	YpixelsPerM     int32
+	ColorsUsed      uint32
+	ImportantColors uint32
+	// RedMask         uint32
+	// GreenMask       uint32
+	// BlueMask        uint32
+	// AlphaMask       uint32
+	// CSType          uint32
+	// Endpoints       [3]uint32
+	// GammaRed        uint32
+	// GammaGreen      uint32
+	// GammaBlue       uint32
+	// Intent          uint32
+	// ProfileData     uint32
+	// ProfileSize     uint32
+	// Reserved        uint32
+	// RGBQuads        [8]byte
 }
 
 type Bitmap struct {
@@ -62,19 +82,14 @@ func readHeader(r io.Reader) Header {
 
 func readInfoHeader(r io.Reader, size uint32) InfoHeader {
 	infoHeader := InfoHeader{InfoSize: size}
+	var info Info
+	err := binary.Read(r, binary.LittleEndian, &info)
 
-	buffer := make([]byte, size-4)
-	r.Read(buffer)
-	infoHeader.Width = binary.LittleEndian.Uint32(buffer[0:4])
-	infoHeader.Height = binary.LittleEndian.Uint32(buffer[4:8])
-	infoHeader.Planes = binary.LittleEndian.Uint16(buffer[8:10])
-	infoHeader.BitsPerPixel = binary.LittleEndian.Uint16(buffer[10:12])
-	infoHeader.Compression = binary.LittleEndian.Uint32(buffer[12:16])
-	infoHeader.ImageSize = binary.LittleEndian.Uint32(buffer[16:20])
-	infoHeader.
-		infoHeader.ColorsUsed = binary.LittleEndian.Uint32(buffer[28:32])
-	infoHeader.RawInfo = append(binary.LittleEndian.AppendUint32(infoHeader.RawInfo, size), buffer...)
+	if err != nil {
+		panic(err)
+	}
 
+	infoHeader.Info = info
 	return infoHeader
 }
 
@@ -83,9 +98,6 @@ func Rotate(bmp Bitmap) Bitmap {
 	rotated.Header = bmp.Header
 	rotated.InfoHeader = bmp.InfoHeader
 	rotated.Width, rotated.Height = rotated.Height, rotated.Width
-	for i := 0; i < 4; i++ {
-		rotated.RawInfo[4+i], rotated.RawInfo[8+i] = rotated.RawInfo[8+i], rotated.RawInfo[4+i]
-	}
 
 	width := bmp.Width
 	height := bmp.Height
@@ -94,11 +106,11 @@ func Rotate(bmp Bitmap) Bitmap {
 	oldPad := (4 - ((width * 3) % 4)) % 4
 	newPad := (4 - ((newWidth * 3) % 4)) % 4
 
-	rotated.InfoHeader.ImageSize = (3*newWidth + newPad) * newHeight
+	rotated.InfoHeader.ImageSize = uint32((3*newWidth + newPad) * newHeight)
 	rotated.Image = make([]byte, rotated.ImageSize)
 
-	for r := uint32(0); r < height; r++ {
-		for c := uint32(0); c < width; c++ {
+	for r := int32(0); r < height; r++ {
+		for c := int32(0); c < width; c++ {
 			cnew := r
 			rnew := newHeight - 1 - c
 

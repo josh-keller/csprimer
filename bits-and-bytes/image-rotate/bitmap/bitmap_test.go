@@ -68,7 +68,7 @@ var (
 
 // TestSaveBitmap can be unskipped to verify that saving a BMP is successful
 func TestSaveBitmap(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 	f, err := os.Create("test_rect.bmp")
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -90,8 +90,8 @@ func TestSaveBitmap(t *testing.T) {
 
 // Tests that a new bitmap struct is created from a reader
 func TestNewFromReader(t *testing.T) {
-	assert.Equal(t, uint32(4), squareBmp.Width)
-	assert.Equal(t, uint32(4), squareBmp.Height)
+	assert.Equal(t, int32(4), squareBmp.Width)
+	assert.Equal(t, int32(4), squareBmp.Height)
 	assert.Equal(t, uint32(40), squareBmp.InfoSize)
 	assert.Equal(t, uint32(54), squareBmp.Offset)
 	assert.Equal(t, []byte{0xff, 0x00, 0x00, 0xff, 0x00, 0x00, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00}, squareBmp.Image[0:12])
@@ -100,8 +100,8 @@ func TestNewFromReader(t *testing.T) {
 func TestRotateSquare(t *testing.T) {
 	testCases := []struct {
 		bmp          Bitmap
-		expWidth     uint32
-		expHeight    uint32
+		expWidth     int32
+		expHeight    int32
 		expInfoSize  uint32
 		expOffset    uint32
 		bottomRow    []byte
