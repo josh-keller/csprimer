@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"flag"
 	"fmt"
 	"io"
@@ -73,9 +72,10 @@ func main() {
 
 	bmp := bitmap.NewFromReader(input)
 	rotated := bitmap.Rotate(bmp)
-	binary.Write(output, binary.LittleEndian, &rotated.Header)
-	output.Write(rotated.RawInfo)
-	output.Write(rotated.Image)
+	err := rotated.Write(output)
+	if err != nil {
+		panic(err)
+	}
 
 	// Print output file name
 	if outputFile == nil {

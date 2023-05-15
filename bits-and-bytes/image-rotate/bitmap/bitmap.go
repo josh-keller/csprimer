@@ -5,56 +5,99 @@ import (
 	"io"
 )
 
-type Header struct {
+type FileHeader struct {
 	Signature [2]byte
 	FileSize  uint32
 	Reserved  uint32
 	Offset    uint32
 }
 
-type InfoHeader struct {
-	InfoSize     uint32
-	Width        uint32
-	Height       uint32
-	Planes       uint16
-	BitsPerPixel uint16
-	Compression  uint32
-	ImageSize    uint32
-	XpixelsPerM  uint32
-	YpixelsPerM  uint32
-	ColorsUsed   uint32
-	RawInfo      []byte
+type BmpInfoHeader struct {
+	InfoSize uint32
+	BmpInfoHeaderV5
 }
 
-type Pixel struct {
-	Green uint8
-	Blue  uint8
-	Red   uint8
+type BmpInfoHeaderV3 struct {
+	Width           int32
+	Height          int32
+	Planes          uint16
+	BitsPerPixel    uint16
+	Compression     uint32
+	ImageSize       uint32
+	XpixelsPerM     int32
+	YpixelsPerM     int32
+	ColorsUsed      uint32
+	ImportantColors uint32
+}
+
+type BmpInfoHeaderV4 struct {
+	BmpInfoHeaderV3
+	RedMask        uint32
+	GreenMask      uint32
+	BlueMask       uint32
+	AlphaMask      uint32
+	ColorSpaceType uint32
+	ColorEndpoints CiexyzTriple
+	GammaRed       uint32
+	GammaGreen     uint32
+	GammaBlue      uint32
+}
+
+type BmpInfoHeaderV5 struct {
+	BmpInfoHeaderV4
+	Intent      uint32
+	ProfileData uint32
+	ProfileSize uint32
+	Reserved    uint32
+}
+
+type CiexyzTriple struct {
+	Red   Ciexyz
+	Green Ciexyz
+	Blue  Ciexyz
+}
+
+type Ciexyz struct {
+	X uint32
+	Y uint32
+	Z uint32
 }
 
 type Bitmap struct {
-	Header
-	InfoHeader
+	FileHeader
+	BmpInfoHeader
 	Image []byte
+	_pad  int
 }
-
-// TODO: Go back to old Image implementaiton: just bytes, not Pixel struct
-// This will help the padding
-// Calculate padding based on width before reading, make sure to account for padding while reading
-// Calculate padding when rotating too
-// Pull this out into function of r, c
 
 func NewFromReader(r io.Reader) Bitmap {
 	var bmp Bitmap
 
-	bmp.Header = readHeader(r)
+	bmp.FileHeader = readHeader(r)
 	sizeBuffer := make([]byte, 4)
 	r.Read(sizeBuffer)
 	ihSize := binary.LittleEndian.Uint32(sizeBuffer)
-	bmp.InfoHeader = readInfoHeader(r, ihSize)
+	bmp.BmpInfoHeader = readInfoHeader(r, ihSize)
 
 	bmp.Image = readPixels(r, bmp.ImageSize)
+	bmp.setPad()
 	return bmp
+}
+
+func (bmp *Bitmap) setPad() {
+	bmp._pad = int((4 - ((bmp.Width * 3) % 4)) % 4)
+}
+
+func readHeader(r io.Reader) FileHeader {
+	h := FileHeader{}
+	binary.Read(r, binary.LittleEndian, &h)
+	return h
+}
+
+func readInfoHeader(r io.Reader, size uint32) BmpInfoHeader {
+	infoHeader := BmpInfoHeader{InfoSize: size}
+	binary.Read(r, binary.LittleEndian, &infoHeader.BmpInfoHeaderV5)
+	return infoHeader
 }
 
 func readPixels(r io.Reader, size uint32) []byte {
@@ -66,55 +109,51 @@ func readPixels(r io.Reader, size uint32) []byte {
 	return pixels
 }
 
-func readHeader(r io.Reader) Header {
-	h := Header{}
-	binary.Read(r, binary.LittleEndian, &h)
-	return h
+func (bmp Bitmap) Write(w io.Writer) error {
+	err := binary.Write(w, binary.LittleEndian, &bmp.FileHeader)
+	if err != nil {
+		return err
+	}
+
+	err = binary.Write(w, binary.LittleEndian, &bmp.BmpInfoHeader)
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(bmp.Image)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func readInfoHeader(r io.Reader, size uint32) InfoHeader {
-	infoHeader := InfoHeader{InfoSize: size}
-
-	buffer := make([]byte, size-4)
-	r.Read(buffer)
-	infoHeader.Width = binary.LittleEndian.Uint32(buffer[0:4])
-	infoHeader.Height = binary.LittleEndian.Uint32(buffer[4:8])
-	infoHeader.Planes = binary.LittleEndian.Uint16(buffer[8:10])
-	infoHeader.BitsPerPixel = binary.LittleEndian.Uint16(buffer[10:12])
-	infoHeader.Compression = binary.LittleEndian.Uint32(buffer[12:16])
-	infoHeader.ImageSize = binary.LittleEndian.Uint32(buffer[16:20])
-	infoHeader.ColorsUsed = binary.LittleEndian.Uint32(buffer[28:32])
-	infoHeader.RawInfo = append(binary.LittleEndian.AppendUint32(infoHeader.RawInfo, size), buffer...)
-
-	return infoHeader
+func (bmp Bitmap) indexFromCoords(r, c uint) uint {
+	return r*(uint(bmp.Width)*3+uint(bmp._pad)) + 3*c
 }
 
 func Rotate(bmp Bitmap) Bitmap {
 	var rotated Bitmap
-	rotated.Header = bmp.Header
-	rotated.InfoHeader = bmp.InfoHeader
+	rotated.FileHeader = bmp.FileHeader
+	rotated.BmpInfoHeader = bmp.BmpInfoHeader
 	rotated.Width, rotated.Height = rotated.Height, rotated.Width
-	for i := 0; i < 4; i++ {
-		rotated.RawInfo[4+i], rotated.RawInfo[8+i] = rotated.RawInfo[8+i], rotated.RawInfo[4+i]
-	}
+	rotated.setPad()
 
 	width := bmp.Width
 	height := bmp.Height
 	newWidth := rotated.Width
 	newHeight := rotated.Height
-	oldPad := (4 - ((width * 3) % 4)) % 4
-	newPad := (4 - ((newWidth * 3) % 4)) % 4
 
-	rotated.InfoHeader.ImageSize = (3*newWidth + newPad) * newHeight
+	rotated.BmpInfoHeader.ImageSize = uint32((3*newWidth + int32(rotated._pad)) * newHeight)
 	rotated.Image = make([]byte, rotated.ImageSize)
 
-	for r := uint32(0); r < height; r++ {
-		for c := uint32(0); c < width; c++ {
-			cnew := r
-			rnew := newHeight - 1 - c
+	for row := uint(0); row < uint(height); row++ {
+		for col := uint(0); col < uint(width); col++ {
+			newCol := row
+			newRow := uint(newHeight) - 1 - col
 
-			oldIdx := r*(width*3+oldPad) + 3*c
-			newIdx := rnew*(newWidth*3+newPad) + 3*cnew
+			oldIdx := bmp.indexFromCoords(row, col)
+			newIdx := rotated.indexFromCoords(newRow, newCol)
 			rotated.Image[newIdx] = bmp.Image[oldIdx]
 			rotated.Image[newIdx+1] = bmp.Image[oldIdx+1]
 			rotated.Image[newIdx+2] = bmp.Image[oldIdx+2]
