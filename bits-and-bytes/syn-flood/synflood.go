@@ -52,9 +52,55 @@ type TCPSegment struct {
 	UrgentPointer  uint16
 }
 
-type LatencyLog struct {
+type timeStampPair struct {
 	SynReceived time.Time
 	AckSent     time.Time
+}
+
+func (s TCPSegment) Syn() bool {
+	return s.Flags&0x02 == 0x02
+}
+
+func (s TCPSegment) Ack() bool {
+	return s.Flags&0x10 == 0x10
+}
+
+type LatencyLog struct {
+	log map[uint32]timeStampPair
+}
+
+func (l *LatencyLog) Add(ph PacketHeader, seg TCPSegment) {
+	if seg.Ack() {
+		pair := l.log[seg.AckNumber-1]
+		pair.AckSent = time.Unix(int64(ph.TimestampSec), 1000*int64(ph.TimestampMicro))
+		l.log[seg.AckNumber-1] = pair
+		return
+	}
+	if seg.Syn() {
+		l.log[seg.SequenceNumber] = timeStampPair{
+			SynReceived: time.Unix(int64(ph.TimestampSec), int64(ph.TimestampMicro)*1000),
+			AckSent:     time.Time{},
+		}
+		return
+	}
+}
+
+func (l *LatencyLog) Average() float64 {
+	var totalDuration time.Duration
+	count := int64(0)
+
+	for _, log := range l.log {
+		if !log.AckSent.IsZero() {
+			latency := log.AckSent.Sub(log.SynReceived)
+			if latency < 0 {
+				panic("Latency less than 0")
+			}
+			totalDuration += latency
+			count++
+		}
+	}
+
+	return float64(totalDuration.Seconds()) / float64(count)
 }
 
 func main() {
@@ -67,65 +113,42 @@ func main() {
 
 	var pcapHeader PcapHeader
 	binary.Read(r, binary.LittleEndian, &pcapHeader)
-	fmt.Printf("Read PCAP Header: %+v\n\n", pcapHeader)
 
-	var syn, ack int
 	packetDataBuf := make([]byte, pcapHeader.SnapLen)
+	var synCount, ackCount int
 	var currPacketHeader PacketHeader
 	var currPacket IPPacket
 	var currSegment TCPSegment
-
-	latencyLog := make(map[uint32]LatencyLog)
+	latencyLog := LatencyLog{log: make(map[uint32]timeStampPair)}
 
 	for {
+		// Read the packet header
 		err = binary.Read(r, binary.LittleEndian, &currPacketHeader)
-
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			panic(err)
 		}
 
-		// fmt.Printf("Pcap Header: %+v\n", currPacketHeader)
+		// Read in all data for packet
 		io.ReadFull(r, packetDataBuf[:currPacketHeader.CapturedLength])
 		packetBuf := bufio.NewReader(bytes.NewReader(packetDataBuf[:currPacketHeader.CapturedLength]))
-		packetBuf.Discard(4) // Discard the link layer header
 
+		// Parse into structs
+		packetBuf.Discard(4) // Discard the link layer header
 		binary.Read(packetBuf, binary.BigEndian, &currPacket)
 		binary.Read(packetBuf, binary.BigEndian, &currSegment)
-		// fmt.Printf("Packet: %+v\n", currPacket)
-		// fmt.Printf("Segment: %+v\n", currSegment)
 
-		if currSegment.Flags&0x10 == 0x10 {
-			ack++
-			latLog := latencyLog[currSegment.AckNumber]
-			latLog.AckSent = time.Unix(int64(currPacketHeader.TimestampSec), 1000*int64(currPacketHeader.TimestampMicro))
-			latencyLog[currSegment.AckNumber] = latLog
-		} else if currSegment.Flags&0x02 == 0x02 {
-			syn++
-			latencyLog[currSegment.SequenceNumber] = LatencyLog{
-				SynReceived: time.Unix(int64(currPacketHeader.TimestampSec), int64(currPacketHeader.TimestampMicro)*1000),
-				AckSent:     time.Time{},
-			}
-		}
-		// fmt.Print("\n-------------------\n")
-	}
-
-	fmt.Printf("Total Syn: %d, Total Ack: %d\n", syn, ack)
-
-	var totalDuration time.Duration
-	count := int64(0)
-
-	for _, log := range latencyLog {
-		if !log.AckSent.IsZero() {
-			latency := log.AckSent.Sub(log.SynReceived)
-			if latency < 0 {
-				panic("Latency less than 0")
-			}
-			totalDuration += latency
-			count++
+		// Check for flags
+		if currSegment.Ack() {
+			ackCount++
+			latencyLog.Add(currPacketHeader, currSegment)
+		} else if currSegment.Syn() {
+			synCount++
+			latencyLog.Add(currPacketHeader, currSegment)
 		}
 	}
 
-	fmt.Println("Average latency: ", float64(totalDuration.Microseconds())/float64(count))
+	fmt.Printf("Total Syn: %d, Total Ack: %d\n", synCount, ackCount)
+	fmt.Printf("Average latency: %.03fs\n", latencyLog.Average())
 }
