@@ -10,15 +10,15 @@ const (
 	CONT_BIT = 0b10000000
 )
 
-func Encode(i uint64) []byte {
+func Encode(num uint64) []byte {
 	result := []byte{}
 	curr := byte(0)
 
 	for {
-		curr = byte(i & MASK)
-		i = i >> 7
+		curr = byte(num & MASK)
+		num = num >> 7
 
-		if i == 0 {
+		if num == 0 {
 			result = append(result, curr)
 			break
 		}
