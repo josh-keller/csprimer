@@ -59,7 +59,7 @@ func main() {
 			log.Print(err)
 		}
 
-		handleRequest(conn)
+		go handleRequest(conn)
 
 	}
 }
