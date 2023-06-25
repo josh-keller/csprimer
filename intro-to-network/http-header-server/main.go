@@ -1,11 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net"
 	"regexp"
+	"strings"
 )
 
 type HTTPRequest struct {
@@ -16,13 +17,13 @@ type HTTPRequest struct {
 	Body    string
 }
 
-func ParseRequest(raw []byte) (HTTPRequest, error) {
+func ParseRequest(raw []byte) (*HTTPRequest, error) {
 	reqLineRE := regexp.MustCompile(`(?ms)^\s*(\w+)\s+([\w.\-\/]+)\s+(HTTP\/\d\.\d)\s*\r\n(.*)\r\n\r\n(.*)`)
 	match := reqLineRE.FindSubmatch(raw)
 	if len(match) == 0 {
-		return HTTPRequest{}, errors.New("No match")
+		return nil, errors.New("No match")
 	}
-	return HTTPRequest{
+	return &HTTPRequest{
 		Method:  string(match[1]),
 		Path:    string(match[2]),
 		Version: string(match[3]),
@@ -32,13 +33,11 @@ func ParseRequest(raw []byte) (HTTPRequest, error) {
 }
 
 func parseHeaders(raw string) map[string]string {
-	fmt.Println("Raw:", raw)
-	headerRE := regexp.MustCompile(`^\s*([\w\-]+):\s+(.*)$`)
-	matches := headerRE.FindAllStringSubmatch(raw, 0)
-	fmt.Println("Matches:", matches)
+	headerRE := regexp.MustCompile(`(?mi)^\s*([\w\-]+):\s+(.*)$`)
+	matches := headerRE.FindAllStringSubmatch(raw, -1)
 	headers := make(map[string]string)
 	for _, match := range matches {
-		headers[match[0]] = match[1]
+		headers[match[1]] = strings.TrimSpace(match[2])
 	}
 
 	return headers
@@ -60,25 +59,46 @@ func main() {
 			log.Print(err)
 		}
 
-		buffer := make([]byte, 4096)
+		handleRequest(conn)
 
-		fmt.Print("reading...")
-		n, err := conn.Read(buffer)
-		fmt.Printf("read %d bytes\n", n)
-		if err != nil {
-			log.Print(err)
-			break
-		}
-		log.Print("'", string(buffer[:n]), "'\n")
-		req, err := ParseRequest(buffer)
-		if err != nil {
-			fmt.Println(err)
-		} else {
-			fmt.Printf("%+v\n", req)
-		}
-		conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\nOK"))
-		if err = conn.Close(); err != nil {
-			log.Print(err)
-		}
 	}
+}
+
+func handleRequest(conn *net.TCPConn) {
+	buffer := make([]byte, 4096)
+
+	_, err := conn.Read(buffer)
+	if err != nil {
+		log.Printf("Problem reding request: %v\n", err)
+		return
+	} else {
+		log.Printf("Request received from %s", conn.RemoteAddr().String())
+	}
+
+	req, err := ParseRequest(buffer)
+	if err != nil {
+		log.Printf("Problem parsing request: %v\n", err)
+		return
+	}
+
+	conn.Write(constructResponse(req))
+	if err = conn.Close(); err != nil {
+		log.Printf("Problem writing response: %v\n", err)
+	} else {
+		log.Printf("Response returned to %s", conn.RemoteAddr().String())
+	}
+
+	return
+}
+
+func constructResponse(req *HTTPRequest) []byte {
+	var b strings.Builder
+	b.WriteString("HTTP/1.1 200 OK\r\n")
+	b.WriteString("Content-Type: application/json\r\n\r\n")
+	bodyBytes, err := json.Marshal(req.Headers)
+	if err != nil {
+		panic(err)
+	}
+	b.Write(bodyBytes)
+	return []byte(b.String())
 }
