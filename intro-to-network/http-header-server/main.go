@@ -101,30 +101,35 @@ func handleRequest(conn *net.TCPConn) {
 	return
 }
 
+func respond(conn net.Conn, statusLine string, body []byte) (int, error) {
+	n, err := conn.Write([]byte(statusLine +
+		"\r\nContent-Type: application/json\r\n" +
+		fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))),
+	)
+	if err != nil {
+		return n, err
+	}
+
+	b, err := conn.Write(body)
+	if err != nil {
+		return n, err
+	}
+
+	return b + n, nil
+}
+
 func respondOK(conn net.Conn, body []byte) (int, error) {
-	conn.Write([]byte("HTTP/1.1 200 OK\r\n" +
-		"Content-Type: application/json\r\n" +
-		fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body)),
-	))
-	return conn.Write(body)
+	return respond(conn, "HTTP/1.1 200 OK", body)
 }
 
 func respondBadRequest(conn net.Conn, err error) {
 	body, _ := json.Marshal(struct{ Error string }{Error: err.Error()})
-	conn.Write([]byte("HTTP/1.1 400 Bad Request\r\n" +
-		"Content-Type: application/json\r\n" +
-		fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body)),
-	))
-	conn.Write(body)
+	respond(conn, "HTTP/1.1 400 Bad Request", body)
 	return
 }
 
 func respondInternalError(conn net.Conn, err error) {
 	body, _ := json.Marshal(struct{ Error string }{Error: err.Error()})
-	conn.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n" +
-		"Content-Type: application/json\r\n" +
-		fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body)),
-	))
-	conn.Write(body)
+	respond(conn, "HTTP/1.1 500 Internal Server Error", body)
 	return
 }
