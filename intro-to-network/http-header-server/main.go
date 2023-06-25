@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"regexp"
@@ -56,49 +57,74 @@ func main() {
 	for {
 		conn, err := listener.AcceptTCP()
 		if err != nil {
-			log.Print(err)
+			log.Printf("Problem accepting connection: %v\n", err)
+			continue
 		}
 
 		go handleRequest(conn)
-
 	}
 }
 
 func handleRequest(conn *net.TCPConn) {
+	defer conn.Close()
 	buffer := make([]byte, 4096)
 
 	_, err := conn.Read(buffer)
 	if err != nil {
-		log.Printf("Problem reding request: %v\n", err)
+		log.Printf("Problem reading request: %v\n", err)
+		respondBadRequest(conn, err)
 		return
-	} else {
-		log.Printf("Request received from %s", conn.RemoteAddr().String())
 	}
-
 	req, err := ParseRequest(buffer)
 	if err != nil {
 		log.Printf("Problem parsing request: %v\n", err)
+		respondBadRequest(conn, err)
 		return
 	}
 
-	conn.Write(constructResponse(req))
-	if err = conn.Close(); err != nil {
+	log.Printf("Request received from %s - %s %s", conn.RemoteAddr().String(), req.Method, req.Path)
+
+	body, err := json.Marshal(req.Headers)
+	if err != nil {
+		log.Printf("Problem constructing response body: %v\n", err)
+		respondInternalError(conn, err)
+	}
+
+	bytesWritten, err := respondOK(conn, body)
+
+	if err != nil {
 		log.Printf("Problem writing response: %v\n", err)
 	} else {
-		log.Printf("Response returned to %s", conn.RemoteAddr().String())
+		log.Printf("%d bytes returned to %s", bytesWritten, conn.RemoteAddr().String())
 	}
 
 	return
 }
 
-func constructResponse(req *HTTPRequest) []byte {
-	var b strings.Builder
-	b.WriteString("HTTP/1.1 200 OK\r\n")
-	b.WriteString("Content-Type: application/json\r\n\r\n")
-	bodyBytes, err := json.Marshal(req.Headers)
-	if err != nil {
-		panic(err)
-	}
-	b.Write(bodyBytes)
-	return []byte(b.String())
+func respondOK(conn net.Conn, body []byte) (int, error) {
+	conn.Write([]byte("HTTP/1.1 200 OK\r\n" +
+		"Content-Type: application/json\r\n" +
+		fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body)),
+	))
+	return conn.Write(body)
+}
+
+func respondBadRequest(conn net.Conn, err error) {
+	body, _ := json.Marshal(struct{ Error string }{Error: err.Error()})
+	conn.Write([]byte("HTTP/1.1 400 Bad Request\r\n" +
+		"Content-Type: application/json\r\n" +
+		fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body)),
+	))
+	conn.Write(body)
+	return
+}
+
+func respondInternalError(conn net.Conn, err error) {
+	body, _ := json.Marshal(struct{ Error string }{Error: err.Error()})
+	conn.Write([]byte("HTTP/1.1 500 Internal Server Error\r\n" +
+		"Content-Type: application/json\r\n" +
+		fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body)),
+	))
+	conn.Write(body)
+	return
 }
