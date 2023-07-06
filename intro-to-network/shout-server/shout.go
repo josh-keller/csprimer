@@ -27,9 +27,6 @@ func sysCallShout(port int) {
 		log.Fatalf("Bind: %v", err)
 	}
 
-	unix.Listen(sfd, 10)
-	fmt.Printf("Listening on port %d using Syscall interface\n", port)
-
 	buffer := make([]byte, 4096)
 	for {
 		n, from, err := unix.Recvfrom(sfd, buffer, 0)
