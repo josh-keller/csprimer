@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 
 	"golang.org/x/sys/unix"
 )
@@ -62,8 +64,6 @@ func (h DNSHeader) Reply() bool {
 }
 
 func (h DNSHeader) OPCode() int {
-	fmt.Printf("%x\n", h.Flags)
-	fmt.Printf("%x\n", h.Flags&0x7800>>11)
 	return int(h.Flags & 0x7800 >> 11)
 }
 
@@ -77,10 +77,11 @@ func (h *DNSHeader) MarshalBinary() ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func (h *DNSHeader) UnmarshalBinary(b []byte) error {
+func NewQueryHeaderFromBinary(b []byte) (*DNSHeader, error) {
+	h := &DNSHeader{}
 	r := bytes.NewReader(b)
-	binary.Read(r, binary.BigEndian, h)
-	return nil
+	err := binary.Read(r, binary.BigEndian, h)
+	return h, err
 }
 
 var queryHeader = []byte{
@@ -93,14 +94,22 @@ var queryHeader = []byte{
 }
 
 var query = []byte{
-	0x0a, 'j', 'o', 's', 'h', 'k', 'e', 'l', 'l', 'e', 'r',
-	0x03, 'd', 'e', 'v',
-	0x00,       // root
 	0x00, 0x01, // A record
 	0x00, 0x01, // Internet
 }
 
-func main() {
+func EncodeName(name string) ([]byte, error) {
+	var b bytes.Buffer
+	labels := strings.Split(name, ".")
+	for _, label := range labels {
+		b.WriteByte(byte(len(label)))
+		b.WriteString(label)
+	}
+	b.WriteByte(0)
+	return b.Bytes(), nil
+}
+
+func MakeARecordQuery(name string) ([]byte, error) {
 	addr := &unix.SockaddrInet4{
 		Port: 53,
 		Addr: [4]byte{8, 8, 8, 8},
@@ -108,20 +117,38 @@ func main() {
 
 	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_DGRAM, 0)
 	if err != nil {
-		log.Fatalf("Socket: %v\n", err)
+		return nil, err
 	}
 
-	err = unix.Sendto(fd, append(queryHeader, query...), 0, addr)
+	encodedName, err := EncodeName(name)
 	if err != nil {
-		log.Fatalf("Send: %v\n", err)
+		return nil, err
+	}
+
+	err = unix.Sendto(fd, append(queryHeader, append(encodedName, query...)...), 0, addr)
+	if err != nil {
+		return nil, err
 	}
 
 	buffer := make([]byte, 4096)
 	n, _, err := unix.Recvfrom(fd, buffer, 0)
 	if err != nil {
-		log.Fatalf("Recv: %v\n", err)
+		return nil, err
 	}
 
-	fmt.Println(hex.EncodeToString(buffer[:n]), "\n----------------")
-	fmt.Println(string(buffer[:n]))
+	return buffer[:n], nil
+}
+
+func main() {
+	if len(os.Args) != 2 {
+		log.Fatalln("usage <command> <name to look up>")
+	}
+	name := os.Args[1]
+	response, err := MakeARecordQuery(name)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	fmt.Println(hex.EncodeToString(response), "\n----------------")
+	fmt.Println(string(response))
 }

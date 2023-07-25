@@ -20,10 +20,9 @@ func TestQHMarshalBinary(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []byte{0xab, 0xcd, 0x81, 0x80, 0x00, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00}, encoded)
 
-	var unMarshalledHeader DNSHeader
-	err = unMarshalledHeader.UnmarshalBinary(encoded)
+	unMarshalledHeader, err := NewQueryHeaderFromBinary(encoded)
 	assert.NoError(t, err)
-	assert.Equal(t, qh, unMarshalledHeader)
+	assert.Equal(t, qh, *unMarshalledHeader)
 }
 
 func TestFlags(t *testing.T) {
@@ -42,4 +41,20 @@ func TestFlags(t *testing.T) {
 	assert.False(t, qh.Query(), "Expect Query to be false")
 	assert.Equal(t, 0, qh.OPCode())
 	assert.Equal(t, 0, qh.ReturnCode())
+}
+
+func TestQHUnmarshalBinary(t *testing.T) {
+	expected := &DNSHeader{
+		ID:      0xc9e2,
+		Flags:   DNS_REPLY | OPCODE_QUERY | RECURSION_DESIRED | RECURSION_AVAIL,
+		QDCount: 1,
+		ANCount: 4,
+		NSCount: 0,
+		ARCount: 1,
+	}
+	b := []byte{0xc9, 0xe2, 0x81, 0x80, 0x00, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x01}
+
+	header, err := NewQueryHeaderFromBinary(b)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, header)
 }
