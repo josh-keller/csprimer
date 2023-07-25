@@ -109,6 +109,34 @@ func EncodeName(name string) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+func DecodeNameOrPointer(raw []byte, idx int) (string, error) {
+	var b strings.Builder
+	lenOrPtrIdx := uint16(idx)
+	labelLength := uint16(raw[lenOrPtrIdx])
+
+	for {
+		// If first two bits of 'labelLength' are on, these two bytes are a pointer. Jump to where it points.
+		if labelLength >= 0xC0 {
+			lenOrPtrIdx = binary.BigEndian.Uint16(raw[lenOrPtrIdx:lenOrPtrIdx+2]) & 0x3fff
+			labelLength = uint16(raw[lenOrPtrIdx])
+			continue
+		}
+
+		// If not, decode this chunk, based on length
+		for i := lenOrPtrIdx + 1; i <= lenOrPtrIdx+labelLength; i++ {
+			b.WriteByte(raw[i])
+		}
+		lenOrPtrIdx += labelLength + 1
+		labelLength = uint16(raw[lenOrPtrIdx])
+		if labelLength == 0 {
+			break
+		}
+		b.WriteByte('.')
+	}
+
+	return b.String(), nil
+}
+
 func MakeARecordQuery(name string) ([]byte, error) {
 	addr := &unix.SockaddrInet4{
 		Port: 53,
