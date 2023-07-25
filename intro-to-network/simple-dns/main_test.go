@@ -59,7 +59,7 @@ func TestQHUnmarshalBinary(t *testing.T) {
 	assert.Equal(t, expected, header)
 }
 
-func TestDecodeOrPointer(t *testing.T) {
+func TestDecodeNameOrPointer(t *testing.T) {
 	testCases := []struct {
 		Expected string
 		Index    int
