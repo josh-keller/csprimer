@@ -61,33 +61,132 @@ func TestQHUnmarshalBinary(t *testing.T) {
 
 func TestDecodeNameOrPointer(t *testing.T) {
 	testCases := []struct {
-		Expected string
-		Index    int
-		Raw      []byte
+		Expected     string
+		ExpectedNext int
+		Index        int
+		Raw          []byte
 	}{
-		{"joshkeller.dev", 0, []byte{0x0a, 'j', 'o', 's', 'h', 'k', 'e', 'l', 'l', 'e', 'r', 0x03, 'd', 'e', 'v', 0x00}},
-		{"google.com", 0, []byte{0x06, 'g', 'o', 'o', 'g', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00}},
-		{"joshkeller.dev", 24,
+		{"joshkeller.dev", 16, 0, []byte{0x0a, 'j', 'o', 's', 'h', 'k', 'e', 'l', 'l', 'e', 'r', 0x03, 'd', 'e', 'v', 0x00, 0x00, 0x01, 0x00, 0x01}},
+		{"google.com", 12, 0, []byte{0x06, 'g', 'o', 'o', 'g', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00, 0x00, 0x01, 0x00, 0x01}},
+		{"joshkeller.dev", 26, 24,
 			[]byte{0x00, 0x00, 0x00, 0x00,
 				/* 4 */ 0x0a, 'j', 'o', 's', 'h', 'k', 'e', 'l', 'l', 'e', 'r',
 				/* 15 */ 0x03, 'd', 'e', 'v',
 				/* 19 */ 0x00, 0x00, 0x00, 0x00, 0x00,
-				/* 24 */ 0xc0, 0x04},
+				/* 24 */ 0xc0, 0x04,
+				/* QType, Class */ 0x00, 0x01, 0x00, 0x01},
 		},
-		{"www.joshkeller.dev", 24,
+		{"www.joshkeller.dev", 30, 24,
 			[]byte{0x00, 0x00, 0x00, 0x00,
 				/* 4 */ 0x0a, 'j', 'o', 's', 'h', 'k', 'e', 'l', 'l', 'e', 'r',
 				/* 15 */ 0x03, 'd', 'e', 'v',
 				/* 19 */ 0x00, 0x00, 0x00, 0x00, 0x00,
 				/* 24 */ 0x03, 'w', 'w', 'w',
-				/* 28 */ 0xc0, 0x04},
+				/* 28 */ 0xc0, 0x04,
+				/* QType, Class */ 0x00, 0x01, 0x00, 0x01},
 		},
 	}
 
 	for _, tc := range testCases {
-		decoded, err := DecodeNameOrPointer(tc.Raw, tc.Index)
+		decodedName, nextptr, err := DecodeNameOrPointer(tc.Raw, tc.Index)
 		assert.NoError(t, err)
-		assert.Equal(t, tc.Expected, decoded)
+		assert.Equal(t, tc.Expected, decodedName)
+		assert.Equal(t, tc.ExpectedNext, nextptr)
+	}
+}
+
+func TestDecodeQuestionSection(t *testing.T) {
+	testCases := []struct {
+		Expected QuestionSection
+		Index    int
+		Raw      []byte
+	}{
+		{QuestionSection{"joshkeller.dev", 1, 1}, 0, []byte{0x0a, 'j', 'o', 's', 'h', 'k', 'e', 'l', 'l', 'e', 'r', 0x03, 'd', 'e', 'v', 0x00, 0x00, 0x01, 0x00, 0x01}},
+		{QuestionSection{"google.com", 1, 1}, 0, []byte{0x06, 'g', 'o', 'o', 'g', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00, 0x00, 0x01, 0x00, 0x01}},
+		{QuestionSection{"joshkeller.dev", 1, 1}, 24,
+			[]byte{0x00, 0x00, 0x00, 0x00,
+				/* 4 */ 0x0a, 'j', 'o', 's', 'h', 'k', 'e', 'l', 'l', 'e', 'r',
+				/* 15 */ 0x03, 'd', 'e', 'v',
+				/* 19 */ 0x00, 0x00, 0x00, 0x00, 0x00,
+				/* 24 */ 0xc0, 0x04,
+				/* QType, Class */ 0x00, 0x01, 0x00, 0x01},
+		},
+		{QuestionSection{"www.joshkeller.dev", 1, 1}, 24,
+			[]byte{0x00, 0x00, 0x00, 0x00,
+				/* 4 */ 0x0a, 'j', 'o', 's', 'h', 'k', 'e', 'l', 'l', 'e', 'r',
+				/* 15 */ 0x03, 'd', 'e', 'v',
+				/* 19 */ 0x00, 0x00, 0x00, 0x00, 0x00,
+				/* 24 */ 0x03, 'w', 'w', 'w',
+				/* 28 */ 0xc0, 0x04,
+				/* QType, Class */ 0x00, 0x01, 0x00, 0x01},
+		},
 	}
 
+	for _, tc := range testCases {
+		decoded, _, err := DecodeQuestionSection(tc.Raw, tc.Index)
+		assert.NoError(t, err)
+		assert.Equal(t, tc.Expected, *decoded)
+	}
+}
+
+func TestDecodeResourceRecord(t *testing.T) {
+	testCases := []struct {
+		Expected ResourceRecord
+		Index    int
+		Raw      []byte
+	}{
+		{Expected: ResourceRecord{"joshkeller.dev", 1, 1, 1, 4, []byte{1, 2, 3, 4}},
+			Index: 0,
+			Raw: []byte{
+				0x0a, 'j', 'o', 's', 'h', 'k', 'e', 'l', 'l', 'e', 'r', 0x03, 'd', 'e', 'v', 0x00,
+				0x00, 0x01, // Type
+				0x00, 0x01, // Class
+				0x00, 0x00, 0x00, 0x01, // TTL
+				0x00, 0x04, // RDLength
+				0x01, 0x02, 0x03, 0x04, // RData
+			}},
+		{Expected: ResourceRecord{"google.com", 1, 1, 1, 4, []byte{5, 6, 7, 8}},
+			Index: 0,
+			Raw: []byte{
+				0x06, 'g', 'o', 'o', 'g', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00,
+				0x00, 0x01,
+				0x00, 0x01,
+				0x00, 0x00, 0x00, 0x01, // TTL
+				0x00, 0x04, // RDLength
+				0x05, 0x06, 0x07, 0x08, // RData
+			}},
+		{Expected: ResourceRecord{"joshkeller.dev", 1, 1, 1, 4, []byte{1, 1, 1, 1}},
+			Index: 24,
+			Raw: []byte{0x00, 0x00, 0x00, 0x00,
+				/* 4 */ 0x0a, 'j', 'o', 's', 'h', 'k', 'e', 'l', 'l', 'e', 'r',
+				/* 15 */ 0x03, 'd', 'e', 'v',
+				/* 19 */ 0x00, 0x00, 0x00, 0x00, 0x00,
+				/* 24 */ 0xc0, 0x04,
+				/* Type, Class */ 0x00, 0x01, 0x00, 0x01,
+				0x00, 0x00, 0x00, 0x01, // TTL
+				0x00, 0x04, // RDLength
+				0x01, 0x01, 0x01, 0x01, // RData
+			},
+		},
+		{Expected: ResourceRecord{"www.joshkeller.dev", 1, 1, 1, 4, []byte{1, 1, 1, 1}},
+			Index: 24,
+			Raw: []byte{0x00, 0x00, 0x00, 0x00,
+				/* 4 */ 0x0a, 'j', 'o', 's', 'h', 'k', 'e', 'l', 'l', 'e', 'r',
+				/* 15 */ 0x03, 'd', 'e', 'v',
+				/* 19 */ 0x00, 0x00, 0x01, 0x00, 0x01,
+				/* 24 */ 0x03, 'w', 'w', 'w',
+				/* 28 */ 0xc0, 0x04,
+				/* Type, Class */ 0x00, 0x01, 0x00, 0x01,
+				0x00, 0x00, 0x00, 0x01, // TTL
+				0x00, 0x04, // RDLength
+				0x01, 0x01, 0x01, 0x01, // RData
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		decoded, _, err := DecodeResourceRecord(tc.Raw, tc.Index)
+		assert.NoError(t, err)
+		assert.Equal(t, tc.Expected, *decoded)
+	}
 }

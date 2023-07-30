@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -84,6 +83,52 @@ func NewQueryHeaderFromBinary(b []byte) (*DNSHeader, error) {
 	return h, err
 }
 
+type QuestionSection struct {
+	Name   string
+	QType  uint16
+	QClass uint16
+}
+
+func DecodeQuestionSection(raw []byte, index int) (*QuestionSection, int, error) {
+	name, next, err := DecodeNameOrPointer(raw, index)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return &QuestionSection{
+		name,
+		binary.BigEndian.Uint16(raw[next : next+2]),
+		binary.BigEndian.Uint16(raw[next+2 : next+4]),
+	}, next + 4, nil
+}
+
+type ResourceRecord struct {
+	Name     string
+	Type     uint16
+	Class    uint16
+	TTL      uint32
+	RDLength uint16
+	RData    []byte
+}
+
+func DecodeResourceRecord(raw []byte, index int) (*ResourceRecord, int, error) {
+	name, next, err := DecodeNameOrPointer(raw, index)
+	if err != nil {
+		return nil, 0, err
+	}
+	rr := ResourceRecord{
+		Name:     name,
+		Type:     binary.BigEndian.Uint16(raw[next : next+2]),
+		Class:    binary.BigEndian.Uint16(raw[next+2 : next+4]),
+		TTL:      binary.BigEndian.Uint32(raw[next+4 : next+8]),
+		RDLength: binary.BigEndian.Uint16(raw[next+8 : next+10]),
+	}
+
+	next = next + 10
+	rr.RData = raw[next : next+int(rr.RDLength)]
+	return &rr, next + int(rr.RDLength), nil
+}
+
 var queryHeader = []byte{
 	0xAB, 0xCD, // ID
 	0x01, 0x00, // FLAGS
@@ -109,14 +154,16 @@ func EncodeName(name string) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func DecodeNameOrPointer(raw []byte, idx int) (string, error) {
+func DecodeNameOrPointer(raw []byte, idx int) (string, int, error) {
 	var b strings.Builder
 	lenOrPtrIdx := uint16(idx)
 	labelLength := uint16(raw[lenOrPtrIdx])
+	nextPtr := -1
 
 	for {
 		// If first two bits of 'labelLength' are on, these two bytes are a pointer. Jump to where it points.
 		if labelLength >= 0xC0 {
+			nextPtr = int(lenOrPtrIdx + 2)
 			lenOrPtrIdx = binary.BigEndian.Uint16(raw[lenOrPtrIdx:lenOrPtrIdx+2]) & 0x3fff
 			labelLength = uint16(raw[lenOrPtrIdx])
 			continue
@@ -134,7 +181,12 @@ func DecodeNameOrPointer(raw []byte, idx int) (string, error) {
 		b.WriteByte('.')
 	}
 
-	return b.String(), nil
+	if nextPtr == -1 {
+		nextPtr = int(lenOrPtrIdx + 1)
+
+	}
+
+	return b.String(), nextPtr, nil
 }
 
 func MakeARecordQuery(name string) ([]byte, error) {
@@ -177,6 +229,71 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	fmt.Println(hex.EncodeToString(response), "\n----------------")
-	fmt.Println(string(response))
+	qh, err := NewQueryHeaderFromBinary(response)
+	if err != nil {
+		panic(err)
+	}
+	next := 12
+
+	fmt.Printf("Header:\n\t%+v\n-------------\n", qh)
+
+	questions := make([]*QuestionSection, qh.QDCount)
+	for i := uint16(0); i < qh.QDCount; i++ {
+		question, returned_next, err := DecodeQuestionSection(response, next)
+		if err != nil {
+			panic(err)
+		}
+		questions[i] = question
+		next = returned_next
+	}
+
+	for qn, q := range questions {
+		fmt.Printf("Question %d:\n\t%+v\n", qn+1, q)
+	}
+	fmt.Println("-----------------------")
+
+	answers := make([]*ResourceRecord, qh.ANCount)
+	for i := uint16(0); i < qh.ANCount; i++ {
+		answer, returned_next, err := DecodeResourceRecord(response, next)
+		if err != nil {
+			panic(err)
+		}
+		answers[i] = answer
+		next = returned_next
+	}
+
+	for an, a := range answers {
+		fmt.Printf("Answers %d:\n\t%+v\n", an+1, a)
+	}
+	fmt.Println("-----------------------")
+
+	authorities := make([]*ResourceRecord, qh.NSCount)
+	for i := uint16(0); i < qh.NSCount; i++ {
+		authority, returned_next, err := DecodeResourceRecord(response, next)
+		if err != nil {
+			panic(err)
+		}
+		authorities[i] = authority
+		next = returned_next
+	}
+
+	for nsn, ns := range authorities {
+		fmt.Printf("NS %d:\n\t%+v\n", nsn+1, ns)
+	}
+	fmt.Println("-----------------------")
+
+	additionals := make([]*ResourceRecord, qh.NSCount)
+	for i := uint16(0); i < qh.ARCount; i++ {
+		addtl, returned_next, err := DecodeResourceRecord(response, next)
+		if err != nil {
+			panic(err)
+		}
+		additionals[i] = addtl
+		next = returned_next
+	}
+
+	for addn, addtl := range additionals {
+		fmt.Printf("NS %d:\n\t%+v\n", addn+1, addtl)
+	}
+	fmt.Println("-----------------------")
 }
