@@ -44,6 +44,7 @@ if __name__ == '__main__':
     actual_cases = 0
     py_time = 0
     c_time = 0
+    c_opt_time = 0
 
     print('Running speed test...')
 
@@ -55,22 +56,39 @@ if __name__ == '__main__':
         end = time.process_time_ns()
         py_time += (end - start)
         assert n == res
+
+    for _ in range(num_cases):
+        n = random.getrandbits(64)
+        # time the C optimized
+        start = time.process_time_ns()
+        res = cvarint.decode(cvarint.encode_optimized(n))
+        end = time.process_time_ns()
+        c_opt_time += (end - start)
+        assert n == res
+        actual_cases += 1
+
+    for _ in range(num_cases):
+        n = random.getrandbits(64)
         # time the C
         start = time.process_time_ns()
         res = cvarint.decode(cvarint.encode(n))
         end = time.process_time_ns()
         c_time += (end - start)
-        actual_cases += 1
-        try:
-            assert n == res
-        except AssertionError:
-            print(f'Failed on {n}: round trip result was {res}')
-            break
+        assert n == res
+        
+        # try:
+        #     assert n == res
+        # except AssertionError:
+        #     print(f'Failed on {n}: round trip result was {res}')
+        #     break
 
     py_time_sec = float(py_time) / actual_cases
     c_time_sec = float(c_time) / actual_cases
+    c_opt_time_sec = float(c_opt_time) / actual_cases
     print(f'Executed {actual_cases:,} random tests\n\n'
           f'Python:\t{int(py_time/actual_cases):>6}ns per case '
           f'({py_time_sec:0.3f}s total)\n'
           f'C:\t{int(c_time/actual_cases):>6}ns per case '
-          f'({c_time_sec:0.3f}s total)')
+          f'({c_time_sec:0.3f}s total)\n'
+          f'C Opt:\t{int(c_opt_time/actual_cases):>6}ns per case '
+          f'({c_opt_time_sec:0.3f}s total)')
