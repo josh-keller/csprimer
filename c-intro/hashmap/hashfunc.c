@@ -2,6 +2,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+unsigned long hash(char *str) {
+  unsigned long hash = 5381;
+  int c;
+
+  while ((c = *str++)) {
+    hash = ((hash << 5) + hash) + c;
+  }
+
+  return hash;
+}
+
 int main(int argc, char *argv[])
 {
   if (argc != 2) {
@@ -11,15 +22,8 @@ int main(int argc, char *argv[])
 
   char *str = argv[1];
 
-  uint32_t hash = 0;
-
-  for (int i = 0; str[i]; i++) {
-    uint32_t highorder = hash & 0xf8000000;
-    hash <<= 5;
-    hash = hash ^ ()
-    int 
-  }
-
+  printf("%lu\n", hash(str) % 1000);
 
   return EXIT_SUCCESS;
 }
+
