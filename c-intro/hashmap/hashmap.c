@@ -17,13 +17,16 @@ unsigned long hash(char *str) {
   return hash;
 }
 
-typedef struct {
+typedef struct Node *Node;
+
+struct Node {
   char *key;
   void *val;
-} Node;
+  Node next;
+};
 
 typedef struct {
-  Node **buckets;
+  Node *buckets;
   size_t bucket_count;
 } Hashmap;
 
@@ -31,7 +34,7 @@ Hashmap *Hashmap_new(void) {
   Hashmap *h = malloc(sizeof(Hashmap));
   h->bucket_count = STARTING_BUCKETS;
 
-  h->buckets = calloc(STARTING_BUCKETS, sizeof(Node *));
+  h->buckets = calloc(STARTING_BUCKETS, sizeof(Node));
   // for (int i = 0; i < STARTING_BUCKETS; i++) {
   //   printf("Bucket %d: %p\n", i, h->buckets[i]);
   // }
@@ -40,10 +43,12 @@ Hashmap *Hashmap_new(void) {
 
 void Hashmap_free(Hashmap *h) {
   for (int i = 0; i < h->bucket_count; i++) {
-    if (h->buckets[i]) {
-      free(h->buckets[i]->key);
-      // Do I need to free val too? I'm thinking no?
-      free(h->buckets[i]);
+    for (Node curr = h->buckets[i], next = NULL; curr != NULL; curr = next) {
+      next = curr->next;
+      free(curr->key);
+      // Do I need to free val too? I'm thinking no because the caller might
+      // retain a reference
+      free(curr);
     }
   }
   free(h->buckets);
@@ -54,25 +59,56 @@ void Hashmap_set(Hashmap *h, char *key, void *val) {
   size_t key_hash = hash(key) % h->bucket_count;
   printf("Setting key %s in bucket %zu to value %p\n", key, key_hash, val);
 
-  // TODO: Implement collision handling
   if (h->buckets[key_hash] == NULL) {
-    h->buckets[key_hash] = (Node *)malloc(sizeof(Node));
+    printf("No bucket here, creating!\n");
+    h->buckets[key_hash] = (Node)malloc(sizeof(Node));
     h->buckets[key_hash]->key = strdup(key);
     h->buckets[key_hash]->val = val;
-  } else if (strcmp(h->buckets[key_hash]->key, key)) {
-    h->buckets[key_hash]->val = val;
-  } else if (h->buckets[key_hash] != NULL) {
-    fprintf(stderr, "Bucket already full, collisions not implemented!\n");
-    Hashmap_free(h);
-    exit(1);
+    h->buckets[key_hash]->next = NULL;
+    return;
   }
+
+  Node next = h->buckets[key_hash];
+  Node curr = NULL;
+  
+  while (next != NULL) {
+    curr = next;
+    next = curr->next;
+
+    // printf("Bucket exists, walking Nodes!\n");
+    // printf("Current key: %s.\n", curr->key);
+    if (strcmp(curr->key, key) == 0) {
+      // printf("Node exists with key");
+      curr->val = val;
+      return;
+    }
+  }
+
+  curr->next = (Node)malloc(sizeof(Node));
+  curr->next->key = strdup(key);
+  curr->next->val = val;
+  curr->next->next = NULL;
+  return;
 }
 
 void *Hashmap_get(Hashmap *h, char *key) {
   size_t key_hash = hash(key) % h->bucket_count;
+  // printf("Looking for key %s.\n", key);
 
-  // TODO: Implement collisions:
-  return h->buckets[key_hash]->val;
+  Node curr = h->buckets[key_hash];
+  while (curr != NULL) {
+    // printf("Current key: %s, val: %p.\n", curr->key, curr->val);
+    if (strcmp(curr->key, key) == 0) {
+      // printf("Match, returning!\n");
+      return curr->val;
+    }
+
+    // printf("No match, next!\n");
+
+    curr = curr->next;
+  }
+
+  return NULL;
 }
 
 int main() {
