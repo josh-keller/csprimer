@@ -5,6 +5,7 @@
 #include <string.h>
 
 #define STARTING_BUCKETS 8
+#define MAX_KEY_SIZE 16
 
 unsigned long hash(char *str) {
   unsigned long hash = 5381;
@@ -30,14 +31,33 @@ typedef struct {
   size_t bucket_count;
 } Hashmap;
 
+Node Node_new(char *key, void *val, Node next) {
+  Node new_node = (Node)malloc(sizeof(struct Node));
+  if (new_node == NULL) {
+    return NULL;
+  }
+
+  new_node->key = strdup(key);
+  if (new_node->key == NULL) {
+    free(new_node);
+    return NULL;
+  }
+  new_node->val = val;
+  new_node->next = next;
+  return new_node;
+}
+
 Hashmap *Hashmap_new(void) {
   Hashmap *h = malloc(sizeof(Hashmap));
+  if (h == NULL) {
+    return NULL;
+  }
   h->bucket_count = STARTING_BUCKETS;
-
-  h->buckets = calloc(STARTING_BUCKETS, sizeof(Node));
-  // for (int i = 0; i < STARTING_BUCKETS; i++) {
-  //   printf("Bucket %d: %p\n", i, h->buckets[i]);
-  // }
+  h->buckets = calloc(STARTING_BUCKETS, sizeof(struct Node));
+  if (h->buckets == NULL) {
+    free(h);
+    return NULL;
+  }
   return h;
 }
 
@@ -46,8 +66,6 @@ void Hashmap_free(Hashmap *h) {
     for (Node curr = h->buckets[i], next = NULL; curr != NULL; curr = next) {
       next = curr->next;
       free(curr->key);
-      // Do I need to free val too? I'm thinking no because the caller might
-      // retain a reference
       free(curr);
     }
   }
@@ -57,14 +75,8 @@ void Hashmap_free(Hashmap *h) {
 
 void Hashmap_set(Hashmap *h, char *key, void *val) {
   size_t key_hash = hash(key) % h->bucket_count;
-  printf("Setting key %s in bucket %zu to value %p\n", key, key_hash, val);
-
   if (h->buckets[key_hash] == NULL) {
-    printf("No bucket here, creating!\n");
-    h->buckets[key_hash] = (Node)malloc(sizeof(Node));
-    h->buckets[key_hash]->key = strdup(key);
-    h->buckets[key_hash]->val = val;
-    h->buckets[key_hash]->next = NULL;
+    h->buckets[key_hash] = Node_new(key, val, NULL);
     return;
   }
 
@@ -74,42 +86,52 @@ void Hashmap_set(Hashmap *h, char *key, void *val) {
   while (next != NULL) {
     curr = next;
     next = curr->next;
-
-    // printf("Bucket exists, walking Nodes!\n");
-    // printf("Current key: %s.\n", curr->key);
     if (strcmp(curr->key, key) == 0) {
-      // printf("Node exists with key");
       curr->val = val;
       return;
     }
   }
 
-  curr->next = (Node)malloc(sizeof(Node));
-  curr->next->key = strdup(key);
-  curr->next->val = val;
-  curr->next->next = NULL;
+  curr->next = Node_new(key, val, NULL);
   return;
 }
 
 void *Hashmap_get(Hashmap *h, char *key) {
   size_t key_hash = hash(key) % h->bucket_count;
-  // printf("Looking for key %s.\n", key);
 
   Node curr = h->buckets[key_hash];
   while (curr != NULL) {
-    // printf("Current key: %s, val: %p.\n", curr->key, curr->val);
     if (strcmp(curr->key, key) == 0) {
-      // printf("Match, returning!\n");
       return curr->val;
     }
-
-    // printf("No match, next!\n");
-
     curr = curr->next;
   }
 
   return NULL;
 }
+
+void Hashmap_delete(Hashmap *h, char *key) {
+  size_t key_hash = hash(key) % h->bucket_count;
+  Node curr = h->buckets[key_hash];
+  Node prev = NULL;
+  
+  while (curr != NULL) {
+    if (strcmp(curr->key, key) == 0) {
+      if (prev != NULL) {
+        prev->next = curr->next;
+      } else {
+        h->buckets[key_hash] = curr->next;
+      }
+
+      free(curr->key);
+      free(curr);
+      return;
+    }
+    prev = curr;
+    curr = curr->next;
+  }
+}
+
 
 int main() {
   Hashmap *h = Hashmap_new();
@@ -127,23 +149,23 @@ int main() {
   Hashmap_set(h, "item a", &c);
   assert(Hashmap_get(h, "item a") == &c);
 
-  // // basic delete functionality
-  // Hashmap_delete(h, "item a");
-  // assert(Hashmap_get(h, "item a") == NULL);
-  //
-  // // handle collisions correctly
-  // // note: this doesn't necessarily test expansion
-  // int i, n = STARTING_BUCKETS * 10, ns[n];
-  // char key[MAX_KEY_SIZE];
-  // for (i = 0; i < n; i++) {
-  //   ns[i] = i;
-  //   sprintf(key, "item %d", i);
-  //   Hashmap_set(h, key, &ns[i]);
-  // }
-  // for (i = 0; i < n; i++) {
-  //   sprintf(key, "item %d", i);
-  //   assert(Hashmap_get(h, key) == &ns[i]);
-  // }
+  // basic delete functionality
+  Hashmap_delete(h, "item a");
+  assert(Hashmap_get(h, "item a") == NULL);
+
+  // handle collisions correctly
+  // note: this doesn't necessarily test expansion
+  int i, n = STARTING_BUCKETS * 10, ns[n];
+  char key[MAX_KEY_SIZE];
+  for (i = 0; i < n; i++) {
+    ns[i] = i;
+    sprintf(key, "item %d", i);
+    Hashmap_set(h, key, &ns[i]);
+  }
+  for (i = 0; i < n; i++) {
+    sprintf(key, "item %d", i);
+    assert(Hashmap_get(h, key) == &ns[i]);
+  }
 
   Hashmap_free(h);
   /*
