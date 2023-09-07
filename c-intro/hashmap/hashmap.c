@@ -1,14 +1,28 @@
 #include <assert.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #define STARTING_BUCKETS 8
-#define MAX_KEY_SIZE 16
+#define MAX_KEY_SIZE 32
 
-unsigned long hash(char *str) {
-  unsigned long hash = 5381;
+typedef uint32_t Hash;
+
+typedef struct Node {
+  char *key;
+  void *val;
+  struct Node *next;
+} Node;
+
+typedef struct {
+  Node **buckets;
+  size_t bucket_count;
+} Hashmap;
+
+Hash hash(const char *str) {
+  Hash hash = 5381;
   int c;
 
   while ((c = *str++)) {
@@ -18,30 +32,17 @@ unsigned long hash(char *str) {
   return hash;
 }
 
-typedef struct Node *Node;
+Node *Node_new(char *key, void *val, Node *next) {
+  char *new_key = strdup(key);
 
-struct Node {
-  char *key;
-  void *val;
-  Node next;
-};
+  if (new_key == NULL) return NULL;
 
-typedef struct {
-  Node *buckets;
-  size_t bucket_count;
-} Hashmap;
-
-Node Node_new(char *key, void *val, Node next) {
-  Node new_node = (Node)malloc(sizeof(struct Node));
+  Node *new_node = (Node *)malloc(sizeof(Node));
   if (new_node == NULL) {
     return NULL;
   }
 
-  new_node->key = strdup(key);
-  if (new_node->key == NULL) {
-    free(new_node);
-    return NULL;
-  }
+  new_node->key = new_key;
   new_node->val = val;
   new_node->next = next;
   return new_node;
@@ -53,7 +54,7 @@ Hashmap *Hashmap_new(void) {
     return NULL;
   }
   h->bucket_count = STARTING_BUCKETS;
-  h->buckets = calloc(STARTING_BUCKETS, sizeof(struct Node));
+  h->buckets = calloc(STARTING_BUCKETS, sizeof(Node));
   if (h->buckets == NULL) {
     free(h);
     return NULL;
@@ -63,7 +64,7 @@ Hashmap *Hashmap_new(void) {
 
 void Hashmap_free(Hashmap *h) {
   for (int i = 0; i < h->bucket_count; i++) {
-    for (Node curr = h->buckets[i], next = NULL; curr != NULL; curr = next) {
+    for (Node *curr = h->buckets[i], *next = NULL; curr != NULL; curr = next) {
       next = curr->next;
       free(curr->key);
       free(curr);
@@ -74,14 +75,15 @@ void Hashmap_free(Hashmap *h) {
 }
 
 void Hashmap_set(Hashmap *h, char *key, void *val) {
-  size_t key_hash = hash(key) % h->bucket_count;
-  if (h->buckets[key_hash] == NULL) {
-    h->buckets[key_hash] = Node_new(key, val, NULL);
+  Hash key_hash = hash(key);
+  Hash bucket = key_hash % h->bucket_count;
+  if (h->buckets[bucket] == NULL) {
+    h->buckets[bucket] = Node_new(key, val, NULL);
     return;
   }
 
-  Node next = h->buckets[key_hash];
-  Node curr = NULL;
+  Node *next = h->buckets[bucket];
+  Node *curr = NULL;
   
   while (next != NULL) {
     curr = next;
@@ -97,9 +99,9 @@ void Hashmap_set(Hashmap *h, char *key, void *val) {
 }
 
 void *Hashmap_get(Hashmap *h, char *key) {
-  size_t key_hash = hash(key) % h->bucket_count;
+  uint32_t key_hash = hash(key) % h->bucket_count;
 
-  Node curr = h->buckets[key_hash];
+  Node *curr = h->buckets[key_hash];
   while (curr != NULL) {
     if (strcmp(curr->key, key) == 0) {
       return curr->val;
@@ -111,9 +113,9 @@ void *Hashmap_get(Hashmap *h, char *key) {
 }
 
 void Hashmap_delete(Hashmap *h, char *key) {
-  size_t key_hash = hash(key) % h->bucket_count;
-  Node curr = h->buckets[key_hash];
-  Node prev = NULL;
+  uint32_t key_hash = hash(key) % h->bucket_count;
+  Node *curr = h->buckets[key_hash];
+  Node *prev = NULL;
   
   while (curr != NULL) {
     if (strcmp(curr->key, key) == 0) {
@@ -131,7 +133,6 @@ void Hashmap_delete(Hashmap *h, char *key) {
     curr = curr->next;
   }
 }
-
 
 int main() {
   Hashmap *h = Hashmap_new();
