@@ -13,6 +13,7 @@ typedef uint32_t Hash;
 typedef struct Node {
   char *key;
   void *val;
+  Hash hash;
   struct Node *next;
 } Node;
 
@@ -32,7 +33,7 @@ Hash hash(const char *str) {
   return hash;
 }
 
-Node *Node_new(char *key, void *val, Node *next) {
+Node *Node_new(char *key, void *val, Hash hash, Node *next) {
   char *new_key = strdup(key);
 
   if (new_key == NULL) return NULL;
@@ -43,6 +44,7 @@ Node *Node_new(char *key, void *val, Node *next) {
   }
 
   new_node->key = new_key;
+  new_node->hash = hash;
   new_node->val = val;
   new_node->next = next;
   return new_node;
@@ -77,8 +79,9 @@ void Hashmap_free(Hashmap *h) {
 void Hashmap_set(Hashmap *h, char *key, void *val) {
   Hash key_hash = hash(key);
   Hash bucket = key_hash % h->bucket_count;
+
   if (h->buckets[bucket] == NULL) {
-    h->buckets[bucket] = Node_new(key, val, NULL);
+    h->buckets[bucket] = Node_new(key, val, key_hash, NULL);
     return;
   }
 
@@ -94,7 +97,7 @@ void Hashmap_set(Hashmap *h, char *key, void *val) {
     }
   }
 
-  curr->next = Node_new(key, val, NULL);
+  curr->next = Node_new(key, val, key_hash, NULL);
   return;
 }
 
