@@ -1,3 +1,5 @@
+%define MASK 0x07fffffe
+
 section .text
 global pangram
 pangram:
@@ -14,18 +16,17 @@ pangram:
 	;  - |= with the bs register (check reg in LLDB)
 	;  - check mask
 
-	xor 	r11, r11; rcx will be the offset
-	xor		r9d, r9d		; r9d will be the bitstring
+	xor		r9d, r9d		; bs = 0
 
 _loop:
-  mov		cl, [rdi + r11]	  ; load current char
-	inc		r11 							; increment offset
+  mov		cl, [rdi]     	  ; load current char
+	inc		rdi 							; increment offset
 	cmp		cl, 0							; if it is zero
 	je		_end							; jump to end
 	cmp		cl, 0x40					; skip < @
 	jl		_loop
 
-	and		cl, 0x1f					; load mask into cl
+	and		cl, 0x1f					; load character mask into cl (look at low order 5 bits)
 	lea 	r10d, 1						; load 1 into r10d
 	shl		r10d, cl					; shift by cl
 	or		r9d, r10d 				; or this with bitstring
@@ -34,8 +35,8 @@ _loop:
 
 
 _end:
-	and		r9d, 0x07fffffe		; mask the bitstring
-	cmp		r9d, 0x07fffffe		; compare the bitstring
+	and		r9d, MASK		      ; mask the bitstring
+	cmp		r9d, MASK		      ; compare the bitstring
 	je		_success					; if they are equal go to success
 	lea   eax, 0
 	ret
