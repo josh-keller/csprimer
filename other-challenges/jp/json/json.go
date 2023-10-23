@@ -3,52 +3,56 @@ package json
 import (
 	"errors"
 	"fmt"
+	"io"
 )
 
 type Obj interface{}
 
 var ErrMissingClosingBrace = errors.New("No matching '}' found.")
 
-func Parse(b []byte) (Obj, error) {
-	return parseJson(b, 0)
+func Parse(r io.ByteScanner) (Obj, error) {
+	return parseJson(r, 0)
 }
 
-func parseJson(b []byte, i int) (Obj, error) {
+func parseJson(r io.ByteScanner, i int) (Obj, error) {
 	// Next should be an opening char
-	i, err := consumeWhitespace(b, i)
+	b, err := consumeWhitespace(r)
 	if err != nil {
 		return nil, errors.New("File is only whitepace")
 	}
 
-	switch b[i] {
+	switch b {
 	case '{':
-		return parseObject(b, i+1)
+		return parseObject(r)
 	default:
 		return nil, errors.New(fmt.Sprintf("Invalid character at position %d", i))
 	}
 }
 
-func consumeWhitespace(b []byte, i int) (int, error) {
-	for ; i < len(b); i++ {
-		if !isWhiteSpace(b[i]) {
-			return i, nil
+func consumeWhitespace(r io.ByteScanner) (byte, error) {
+	var b byte
+	var err error
+
+	for b, err = r.ReadByte(); err == nil; b, err = r.ReadByte() {
+		if !isWhiteSpace(b) {
+			return b, nil
 		}
 	}
 
-	return i, errors.New("Reached end of file")
+	return b, errors.New("Reached end of file")
 }
 
 func isWhiteSpace(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
 }
 
-func parseObject(b []byte, i int) (Obj, error) {
-	i, err := consumeWhitespace(b, i)
+func parseObject(r io.ByteScanner) (Obj, error) {
+	b, err := consumeWhitespace(r)
 	if err != nil {
-		return nil, errors.New("Unexpected end of file")
+		return nil, errors.Join(errors.New("Parse object"), err)
 	}
 
-	switch b[i] {
+	switch b {
 	case '}':
 		return struct{}{}, nil
 	default:

@@ -1,6 +1,7 @@
 package json_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/josh-keller/coding-challenges/json/json"
@@ -8,15 +9,15 @@ import (
 
 func TestParseObject(t *testing.T) {
 	testCases := []struct {
-		Str []byte
+		Str string
 		Err error
 	}{
-		{[]byte(`{}`), nil},
-		{[]byte(`{\`), json.ErrMissingClosingBrace},
+		{`{}`, nil},
+		{`{\`, json.ErrMissingClosingBrace},
 	}
 
 	for _, tc := range testCases {
-		_, err := json.Parse(tc.Str)
+		_, err := json.Parse(strings.NewReader(tc.Str))
 		if err != tc.Err {
 			t.Fatalf("Expected no error, got %v", err)
 		}
