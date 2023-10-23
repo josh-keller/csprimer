@@ -14,6 +14,7 @@ func TestParseObject(t *testing.T) {
 	}{
 		{`{}`, nil},
 		{`{\`, json.ErrMissingClosingBrace},
+		{`{"key1": "value1"}`, nil},
 	}
 
 	for _, tc := range testCases {
