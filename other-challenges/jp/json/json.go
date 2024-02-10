@@ -52,10 +52,12 @@ func parseObject(r io.ByteScanner) (Obj, error) {
 		return nil, errors.Join(errors.New("Parse object"), err)
 	}
 
-	switch b {
-	case '}':
-		return struct{}{}, nil
-	default:
-		return nil, ErrMissingClosingBrace
+	for b != '}' {
+		switch b {
+		default:
+			return nil, ErrMissingClosingBrace
+		}
 	}
+
+	return struct{}{}, nil
 }
