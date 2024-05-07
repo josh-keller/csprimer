@@ -1,6 +1,9 @@
 package set1
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestC1(t *testing.T) {
 	hex := "49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d"
@@ -32,5 +35,20 @@ func TestC3(t *testing.T) {
 
 	if got != want {
 		t.Fatalf("Want: %s, Got: %s\n", want, got)
+	}
+}
+
+func TestC4(t *testing.T) {
+	contents, err := os.ReadFile("../inputs/4.txt")
+	if err != nil {
+		t.Fatalf("Could not read file")
+	}
+	input := string(contents)
+	want := "Now that the party is jumping\n"
+
+	got := FindSingleXor(input)
+
+	if got != want {
+		t.Fatalf("Want: '%s', Got: '%s'\n", want, got)
 	}
 }
