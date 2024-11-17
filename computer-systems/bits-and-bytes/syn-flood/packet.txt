@@ -1,0 +1,50 @@
+// File Header
+D4 C3 B2 A1  // Magic Number = A1B2C3D4 -> little endian, TS microseconds
+02 00 04 00  // Major Version = 2 | Minor Version = 4
+00 00 00 00  // Reserved1
+00 00 00 00  // Reserved2
+00 00 04 00  // SnapLen = 4 * 256 = 1024
+00 00 00 00  // FCS | Link Type = 0 BSD Loopback
+
+// Packet Header
+E5 AA 9B 63  // Timestamp (seconds)
+80 B2 0D 00  // Timestamp (microseconds)
+2C 00 00 00  // Captured packet length
+2C 00 00 00  // Original packet length
+
+// Packet Data:
+  // Link layer header
+  02 00 00 00  // 02 = IPv4
+  
+  // Link layer data:
+    // IPv4 Header
+    45 00 00 28  // Version = 4 | IHL = 5 | DSCP = 0 | ECN = 0 | Length = 0x2800 = 10240
+    32 99 00 00  // Identification = 0x9932 | Flags = 000 | Fragment Offset = 0
+    40 06 00 00  // TTL = 0x40 | Protocol = 6 = TCP | Header Checksum = 0
+    7F 00 00 01  // Source IP = 127.0.0.1
+    7F 00 00 01  // Destination IP = 127.0.0.1
+
+    // IP Packet Data:
+      // TCP segment
+      07 0A 00 50  // Source port = 0x0A07 = 2567 | Destination Port = 0x0050 = 80
+      42 CB EF 11  // Sequence number
+      5A BC 67 59  // Acknowledgement number
+      50 02 02 00  // Data offset = 5 | Reserved (0) | Flags: 00000010 (SYN) | Window Size: 2
+      B4 93 00 00  // Checksum = 93B4 | Urgent pointer = 0
+
+Parsing Plan:
+Parse file header:
+  - SnapLen -> set the buffer size?
+
+Loop over packets:
+  1. Parse Packet Header:
+     - Parse timestamp
+     - Captured packet length
+  2. Use cap packet length to read in packet
+  3. Parse link, IP, TCP headers -OR - Assume all are IPv4/TCP???
+  4. Use a bitmask to determine whether this is SYN or ACK
+
+Step-by-step:
+1. First, count the number of packets in the file
+2. Next, count the number of SYNS and ACKS
+

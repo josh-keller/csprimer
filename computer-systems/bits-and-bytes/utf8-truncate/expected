@@ -1,0 +1,11 @@
+Don't truncate, ASCII
+Do trunc
+Retain full emoji at end 😍
+Truncate full emoji at end 
+
+
+Truncate résum
+Don't truncate family 👨‍👩‍👧‍👦
+Truncate before family 
+Truncate before family 
+Truncate before family 
