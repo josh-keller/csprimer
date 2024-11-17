@@ -49,21 +49,27 @@ type SearchInfo struct {
 	State   [2]Jug
 }
 
-// func nextStates(jugs [2]Jug) []SearchInfo {
-// 	nextStates := []SearchInfo{}
-// 	var tmpJug1, tmpJug2 Jug
-// 	copy(&tmpJug1, jugs[0])
-//
-// 	// - Fill up first jug
-//
-//
-// 	// - Fill up second jug
-// 	// - Dump first jug
-// 	// - Dump second jug
-// 	// - Pour 1 into 2
-// 	// - Pour 2 into 1
-//
-// }
+func addState(states [][2]Jug{}, jug1, jug2 Jug) [][2]Jug {
+
+}
+
+func nextStates(jug1, jug2 Jug) [][2]Jug {
+	nextStates := [][2]Jug{}
+	var tmpJug1, tmpJug2 Jug
+	tmpJug1, tmpJug2 = FillUp(jug1), jug2
+	if tmpJug1 != jug1 && tmpJug2 != jug2 {
+		nextStates = append(nextStates, [2]Jug{tmpJug1, tmpJug2})
+	}
+
+
+
+	// - Fill up second jug
+	// - Dump first jug
+	// - Dump second jug
+	// - Pour 1 into 2
+	// - Pour 2 into 1
+
+}
 
 // func Search(target int, jugs [2]Jug) []string {
 // 	visited := map[[2]Jug]struct{}{jugs: struct{}{}}
