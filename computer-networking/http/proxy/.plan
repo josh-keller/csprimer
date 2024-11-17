@@ -1,0 +1,20 @@
+# Basic Proxy
+
+## High Level Steps
+
+1. Send the request upstream (see the request on the upstream server)
+2. Receive and log the reply from the upstream server
+3. Send the reply back to the client
+
+
+## Request Flow
+
+1. Client opens the TCP connection with proxy (all done with socket syscalls)
+2. Client sends HTTP request as bytes
+3. Proxy opens a connection with the upstream (eventually this should be persistent?)
+4. Proxy sends the HTTP request (add forwarding related header(s)?)
+5. Upstream replies the the proxy
+6. Proxy replies to the client
+
+
+
