@@ -24,9 +24,9 @@ class Projection(object):
     Map the child records using the given map function, e.g. to return a subset
     of the fields.
     """
-    def __init__(self, proj):
+    def __init__(self, proj, input):
         self.proj = proj
-        self.child = None
+        self.child = input
 
     def next(self):
         tuple = self.child.next()
@@ -44,9 +44,9 @@ class Selection(object):
     SQL, and is more like the WHERE clause. We keep the naming to be consistent
     with the literature.
     """
-    def __init__(self, predicate):
+    def __init__(self, predicate, input):
         self.predicate = predicate
-        self.child = None
+        self.child = input
 
     def next(self):
         while True:
@@ -61,10 +61,10 @@ class Limit(object):
     """
     Return only as many as the limit, then stop
     """
-    def __init__(self, n):
+    def __init__(self, n, input):
         self.limit = n
         self.returned = 0
-        self.child = None
+        self.child = input
 
     def next(self):
         if self.limit == self.returned:
@@ -78,10 +78,10 @@ class Sort(object):
     """
     Sort based on the given key function
     """
-    def __init__(self, key, desc=False):
+    def __init__(self, key, input, desc=False):
         self.key = key
         self.desc = desc
-        self.child = None
+        self.child = input
         self.data = None
         self.idx = 0
 
