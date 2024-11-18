@@ -10,7 +10,17 @@ import (
 	"os"
 )
 
+// TODO:
+// - Send whole request to the upstream
+// - Don't block waiting for EOF
+
 // Use this for now to go fast and declutter code
+
+/*
+Receiving 400 from upstream.
+- Tried changing Host
+-
+*/
 func must[T any](val T, err error) T {
 	if err != nil {
 		panic(err)
@@ -19,18 +29,6 @@ func must[T any](val T, err error) T {
 	return val
 }
 
-//	func SplitHTTPLines(data []byte, atEOF bool) (advance int, token []byte, err error) {
-//		// read data one byte at a time and copy into token
-//		// if byte is \r, set a flag
-//		// if flag is set and byte it \n, return
-//		if atEOF && len(data) == 0 {
-//			return 0, nil, nil
-//		}
-//
-//		if i := bytes.IndexByte(data, '\r'); i >= 0 {
-//
-//		}
-//	}
 var (
 	response500 = []byte("HTTP/1.1 500 Internal Server Error\r\n\r\n")
 	response502 = []byte("HTTP/1.1 502 Bad gateway\r\n\r\n")
@@ -66,9 +64,15 @@ func handleConn(clientConn net.Conn) {
 
 	// Get just the request line and write it upstream
 	// TODO: figure out why upstream wasn't working with full request
-	requestLine := bytes.Split(clientBuffer, []byte("\r\n"))[0]
-	requestLine = append(requestLine, []byte("\r\n\r\n")...)
-	n, err = upstreamConn.Write(requestLine)
+	// requestLine := bytes.Split(clientBuffer, []byte("\r\n"))[0]
+	// requestLine = append(requestLine, []byte("\r\n\r\n")...)
+	// re := regexp.MustCompile(`Host: .*`)
+	// print_err("Raw request:\n%s", clientBuffer)
+	// upstreamRequest := re.ReplaceAllLiteral(clientBuffer, []byte("Host: "+upstreamConn.RemoteAddr().String()))
+	// print_err("Rewritten request:\n%s", upstreamRequest)
+	upstreamRequest := clientBuffer
+
+	n, err = upstreamConn.Write(upstreamRequest)
 	if err != nil {
 		clientConn.Write(response500)
 		print_err("ERROR writing upstream: %s", err)
@@ -79,7 +83,11 @@ func handleConn(clientConn net.Conn) {
 	totalBytesReturned := 0
 	upstreamBuffer := make([]byte, 4096)
 	for {
+		// This blocks for a while at the end of each request.
+		// Theory is that the connection doesn't get EOF because browser is using keep-alive
+		// Eventually the browser closes and this call returns
 		n, err = upstreamConn.Read(upstreamBuffer)
+		print_err("Upstream buffer: %s", upstreamBuffer)
 		totalBytesReturned += n
 		if errors.Is(err, io.EOF) {
 			break
