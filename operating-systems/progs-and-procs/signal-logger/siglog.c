@@ -1,15 +1,19 @@
 #include <errno.h>
+#include <fcntl.h>
 #include <float.h>
+#include <netinet/in.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 pid_t mypid;
 
 volatile uint64_t handled = 0;
-volatile int sigint_handled = 0;
+volatile int sigint_handled = 0, quit = 0;
 sigjmp_buf jmp_env_seg, jmp_env_fpe, jmp_env_xfsz, jmp_env_bus, jmp_env_ill,
     jmp_env_sys;
 
@@ -24,9 +28,11 @@ static void tstpHandler(int sig) {
   savedErrno = errno;
 
   if (signal(SIGTSTP, SIG_DFL) == SIG_ERR) {
-    exit(1);
+    quit = 1;
+    return;
   }
 
+  printf("Raising sigstp\n");
   raise(SIGTSTP);
 
   sigemptyset(&tstpMask);
@@ -34,6 +40,11 @@ static void tstpHandler(int sig) {
   if (sigprocmask(SIG_UNBLOCK, &tstpMask, &prevMask) == -1) {
     exit(1);
   }
+
+  // This will trigger SIG_TTIN if process is put in background
+  printf("Press any key ");
+  char c = getc(stdin);
+  printf("\n");
 
   if (sigprocmask(SIG_SETMASK, &prevMask, NULL) == -1) {
     exit(1);
@@ -126,6 +137,44 @@ void file_size_limit() {
   }
 }
 
+int set_up_socket() {
+  int sockfd;
+  struct sockaddr_in server_addr;
+  int flags;
+
+  sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd < 0) {
+    perror("socket");
+    exit(EXIT_FAILURE);
+  }
+
+  memset(&server_addr, 0, sizeof(server_addr));
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  server_addr.sin_port = htons(12345);
+
+  if (bind(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+    perror("bind");
+    close(sockfd);
+    exit(EXIT_FAILURE);
+  }
+
+  flags = fcntl(sockfd, F_GETFL, 0);
+  fcntl(sockfd, F_SETFL, flags | O_ASYNC | O_NONBLOCK);
+
+  fcntl(sockfd, F_SETOWN, getpid());
+
+  // fcntl(sockfd, F_SETSIG, SIGURG);
+  if (listen(sockfd, 5) < 0) {
+    perror("listen");
+    close(sockfd);
+    exit(EXIT_FAILURE);
+  }
+
+  printf("Waiting for connections on fd %d...\n", sockfd);
+  return sockfd;
+}
+
 int main(int argc, char *argv[]) {
   mypid = getpid();
   // Register all valid signals
@@ -156,6 +205,8 @@ int main(int argc, char *argv[]) {
                          "svc #0x80;");
   }
 
+  int sockfd = set_up_socket();
+
   // Child
   if (0 == fork()) {
     exit(0);
@@ -165,6 +216,8 @@ int main(int argc, char *argv[]) {
   alarm(1);
 
   // spin
-  for (;;)
+  while (!quit)
     sleep(1);
+
+  close(sockfd);
 }
