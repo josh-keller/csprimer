@@ -73,6 +73,23 @@ class Limit(object):
         self.returned += 1
         return self.child.next()
 
+class Offset(object):
+    """
+    Skip the first n items and return the rest
+    """
+    def __init__(self, n):
+        self.offset = n
+        self.consumed = 0
+        self.child = None
+
+    def next(self):
+        while self.consumed < self.offset:
+            x = self.child.next()
+            if x == None:
+                return None
+            self.consumed += 1
+
+        return self.child.next()
 
 class Sort(object):
     """
@@ -189,6 +206,7 @@ if __name__ == '__main__':
         ('in_us', bool),
     )
 
+    print('------------')
     # ids of non US birds
     t = tuple(run(Q(
         Projection(lambda x: (x[0],)),
@@ -215,6 +233,21 @@ if __name__ == '__main__':
         ('ostric1', 104.0),
         ('emppen1', 23.0),
         ('wanalb', 8.5),
+    ))
+
+    # id and weight of 4th and 5th heaviest birds
+    t = tuple(run(Q(
+        Projection(lambda x: (x[0], x[2])),
+        Limit(2),
+        Offset(3),
+        Sort(lambda x: x[2], desc=True),
+        MemoryScan(birds),
+    )))
+    
+    print(t)
+    assert(t == (
+        ('baleag', 4.74),
+        ('comrav', 1.2),
     ))
 
     # sum of bird weights
