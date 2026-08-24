@@ -59,36 +59,26 @@ class Selection(object):
 
 class Limit(object):
     """
-    Return only as many as the limit, then stop
+    Return only as many as the limit, then stop.
+    Optional offset as the second argument.
     """
-    def __init__(self, n):
+    def __init__(self, n, o = 0):
         self.limit = n
+        self.offset = o
         self.returned = 0
         self.child = None
 
     def next(self):
+        while self.offset > 0:
+            val = self.child.next();
+            if val == None:
+                return None
+            self.offset -= 1;
+
         if self.limit == self.returned:
             return None
 
         self.returned += 1
-        return self.child.next()
-
-class Offset(object):
-    """
-    Skip the first n items and return the rest
-    """
-    def __init__(self, n):
-        self.offset = n
-        self.consumed = 0
-        self.child = None
-
-    def next(self):
-        while self.consumed < self.offset:
-            x = self.child.next()
-            if x == None:
-                return None
-            self.consumed += 1
-
         return self.child.next()
 
 class Sort(object):
@@ -235,11 +225,18 @@ if __name__ == '__main__':
         ('wanalb', 8.5),
     ))
 
+    # Limit returns all when limit is more than the records available
+    t = tuple(run(Q(
+        Limit(100),
+        MemoryScan(birds),
+    )))
+    
+    assert(len(t) == len(birds))
+
     # id and weight of 4th and 5th heaviest birds
     t = tuple(run(Q(
         Projection(lambda x: (x[0], x[2])),
-        Limit(2),
-        Offset(3),
+        Limit(2, 3),
         Sort(lambda x: x[2], desc=True),
         MemoryScan(birds),
     )))
