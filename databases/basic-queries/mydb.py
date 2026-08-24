@@ -1,3 +1,7 @@
+# Try to implement some aggregation functions like COUNT, AVG, SUM.
+# Support the equivalent of the SQL syntax LIMIT N OFFSET M, i.e. skip the first M records before returning the next N.
+# If your Selection (filter) expression does not support binary expressions (A == B OR C == D), try adding support for that.
+# If you wrote all your tests by manually constructing trees of nodes in your tests, try and write a function that accepts a JSON representation of queries and translates it into a tree of nodes (essentially creating a physical query plan). Put an HTTP endpoint in front of this function and enjoy the fact that you've written a functioning read-only database!
 
 class MemoryScan(object):
     """
@@ -33,7 +37,7 @@ class Projection(object):
         if tuple == None:
             return None
         return self.proj(tuple)
-        
+
 
 
 class Selection(object):
@@ -131,7 +135,7 @@ class Sum(object):
 
 class Avg(object):
     """
-    Sum the given column of the table
+    Average the given column of the table
     """
     def __init__(self, select_col):
         self.select_col = select_col
@@ -150,6 +154,25 @@ class Avg(object):
 
         self.finished = True
         return (self.sum / self.count,)
+
+class Count(object):
+    """
+    Count the number of records
+    """
+    def __init__(self):
+        self.count = 0
+        self.child = None
+        self.finished = False
+
+    def next(self):
+        if self.finished:
+            return None
+
+        while t := self.child.next():
+            self.count += 1
+
+        self.finished = True
+        return self.count
 
 def Q(*nodes):
     """
@@ -209,7 +232,7 @@ if __name__ == '__main__':
         ('emppen1',),
         ('wanalb',),
     )
-    
+
     # id and weight of 3 heaviest birds
     t = tuple(run(Q(
         Projection(lambda x: (x[0], x[2])),
@@ -217,7 +240,7 @@ if __name__ == '__main__':
         Sort(lambda x: x[2], desc=True),
         MemoryScan(birds),
     )))
-    
+
     print(t)
     assert(t == (
         ('ostric1', 104.0),
@@ -230,7 +253,7 @@ if __name__ == '__main__':
         Limit(100),
         MemoryScan(birds),
     )))
-    
+
     assert(len(t) == len(birds))
 
     # id and weight of 4th and 5th heaviest birds
@@ -240,7 +263,7 @@ if __name__ == '__main__':
         Sort(lambda x: x[2], desc=True),
         MemoryScan(birds),
     )))
-    
+
     print(t)
     assert(t == (
         ('baleag', 4.74),
@@ -252,20 +275,29 @@ if __name__ == '__main__':
         Sum(lambda x: x[2]),
         MemoryScan(birds),
     )))
-    
+
     print(t)
     assert(abs(t[0][0] - 141.6664) < .00001)
     # id and weight of 3 heaviest birds
 
 
-    # avg of US birds
+    # avg weight of US birds
     t = tuple(run(Q(
         Avg(lambda x: x[2]),
         Selection(lambda x: x[3]),
         MemoryScan(birds),
     )))
- 
+
     print(t)
     assert(abs(t[0][0] - 0.880914) < .00001)
-    print('ok')
 
+    # count non us birds
+    t = tuple(run(Q(
+        Count(),
+        Selection(lambda x: not x[3]),
+        MemoryScan(birds),
+    )))
+
+    print(t)
+    assert(t == (3,))
+    print('ok')
